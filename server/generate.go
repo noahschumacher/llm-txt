@@ -2,9 +2,12 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -69,22 +72,10 @@ func (s *sseWriter) error(msg string) {
 }
 
 func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
-	var req generateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	req, err := parseGenerateRequest(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
-	}
-
-	if req.URL == "" {
-		http.Error(w, "url is required", http.StatusBadRequest)
-		return
-	}
-	if _, err := url.ParseRequestURI(req.URL); err != nil {
-		http.Error(w, "invalid url", http.StatusBadRequest)
-		return
-	}
-	if req.Mode != "basic" && req.Mode != "enhanced" {
-		req.Mode = "basic"
 	}
 
 	sse, ok := newSSEWriter(w)
@@ -132,4 +123,42 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 `,
 		Summary: "7 pages crawled · 3 sections · mode: " + req.Mode,
 	})
+}
+
+// parseGenerateRequest decodes and validates the request body. Mode defaults to
+// "basic" if omitted or unrecognized. The URL is normalized to its origin
+// (scheme + host) — paths and query params are stripped since llms.txt
+// represents the whole site.
+func parseGenerateRequest(body io.Reader) (generateRequest, error) {
+	var req generateRequest
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
+		return req, errors.New("invalid request body")
+	}
+	if req.URL == "" {
+		return req, errors.New("url is required")
+	}
+
+	normalized, err := normalizeURL(req.URL)
+	if err != nil {
+		return req, errors.New("invalid url")
+	}
+	req.URL = normalized
+
+	if req.Mode != "basic" && req.Mode != "enhanced" {
+		req.Mode = "basic"
+	}
+	return req, nil
+}
+
+// normalizeURL ensures the URL has a scheme and strips path/query/fragment
+// so the crawler always starts from the site root.
+func normalizeURL(raw string) (string, error) {
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return "", err
+	}
+	return u.Scheme + "://" + u.Host, nil
 }
