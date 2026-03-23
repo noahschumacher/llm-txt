@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>llms.txt Generator</title>
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            :root {
+                --bg: #f4f4f5;
+                --surface: #ffffff;
+                --border: #e4e4e7;
+                --primary: #6366f1;
+                --primary-h: #4f46e5;
+                --text: #18181b;
+                --muted: #71717a;
+                --success: #22c55e;
+                --error: #ef4444;
+                --radius: 10px;
+                --shadow:
+                    0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                min-height: 100vh;
+                padding: 2rem 1rem 4rem;
+            }
+
+            .container {
+                max-width: 760px;
+                margin: 0 auto;
+            }
+
+            /* ── Header ── */
+            header {
+                margin-bottom: 2rem;
+            }
+            header h1 {
+                font-size: 1.6rem;
+                font-weight: 700;
+                letter-spacing: -0.02em;
+            }
+            header p {
+                margin-top: 0.35rem;
+                color: var(--muted);
+                font-size: 0.95rem;
+            }
+            header a {
+                color: var(--primary);
+                text-decoration: none;
+            }
+            header a:hover {
+                text-decoration: underline;
+            }
+
+            /* ── Card ── */
+            .card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                box-shadow: var(--shadow);
+                padding: 1.5rem;
+                margin-bottom: 1.25rem;
+            }
+            .card-title {
+                font-size: 0.8rem;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: var(--muted);
+                margin-bottom: 1rem;
+            }
+
+            /* ── Form ── */
+            label {
+                display: block;
+                font-size: 0.875rem;
+                font-weight: 500;
+                margin-bottom: 0.4rem;
+            }
+            .field {
+                margin-bottom: 1.1rem;
+            }
+            input[type="url"],
+            input[type="text"] {
+                width: 100%;
+                padding: 0.55rem 0.75rem;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                font-size: 0.95rem;
+                outline: none;
+                transition: border-color 0.15s;
+            }
+            input[type="url"]:focus {
+                border-color: var(--primary);
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+            }
+
+            .radio-group {
+                display: flex;
+                gap: 0.75rem;
+                flex-wrap: wrap;
+            }
+            .radio-option {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                padding: 0.5rem 0.85rem;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                transition:
+                    border-color 0.15s,
+                    background 0.15s;
+                user-select: none;
+            }
+            .radio-option:has(input:checked) {
+                border-color: var(--primary);
+                background: rgba(99, 102, 241, 0.06);
+            }
+            .radio-option input {
+                accent-color: var(--primary);
+            }
+
+            .checkbox-option {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-size: 0.9rem;
+                cursor: pointer;
+                user-select: none;
+            }
+            .checkbox-option input {
+                accent-color: var(--primary);
+                width: 15px;
+                height: 15px;
+            }
+            .mode-hint {
+                font-size: 0.8rem;
+                color: var(--muted);
+                margin-top: 0.5rem;
+            }
+
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                padding: 0.6rem 1.25rem;
+                border: none;
+                border-radius: 6px;
+                font-size: 0.9rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition:
+                    background 0.15s,
+                    opacity 0.15s;
+            }
+            .btn-primary {
+                background: var(--primary);
+                color: #fff;
+            }
+            .btn-primary:hover:not(:disabled) {
+                background: var(--primary-h);
+            }
+            .btn-primary:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+            .btn-ghost {
+                background: transparent;
+                border: 1px solid var(--border);
+                color: var(--text);
+                font-size: 0.8rem;
+                padding: 0.35rem 0.75rem;
+            }
+            .btn-ghost:hover {
+                background: var(--bg);
+            }
+
+            /* ── Progress ── */
+            #progress-section {
+                display: none;
+            }
+            .progress-list {
+                list-style: none;
+                font-size: 0.875rem;
+                max-height: 180px;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 0.3rem;
+            }
+            .progress-list li {
+                display: flex;
+                align-items: flex-start;
+                gap: 0.5rem;
+                color: var(--muted);
+            }
+            .progress-list li.done {
+                color: var(--text);
+            }
+            .progress-list li.err {
+                color: var(--error);
+            }
+            .dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: var(--border);
+                margin-top: 0.35rem;
+                flex-shrink: 0;
+            }
+            .dot.active {
+                background: var(--primary);
+            }
+            .dot.done {
+                background: var(--success);
+            }
+            .dot.err {
+                background: var(--error);
+            }
+
+            .spinner {
+                width: 14px;
+                height: 14px;
+                border: 2px solid var(--border);
+                border-top-color: var(--primary);
+                border-radius: 50%;
+                animation: spin 0.7s linear infinite;
+                flex-shrink: 0;
+                margin-top: 0.2rem;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+
+            /* ── Results ── */
+            #results-section {
+                display: none;
+            }
+            .results-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 1.25rem;
+            }
+            @media (min-width: 600px) {
+                .results-grid.has-full {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+
+            .result-block {
+            }
+            .result-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 0.5rem;
+            }
+            .result-label {
+                font-size: 0.875rem;
+                font-weight: 600;
+            }
+            .result-actions {
+                display: flex;
+                gap: 0.4rem;
+            }
+
+            textarea.output {
+                width: 100%;
+                height: 260px;
+                padding: 0.75rem;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                font-family: "SFMono-Regular", Consolas, monospace;
+                font-size: 0.8rem;
+                line-height: 1.5;
+                resize: vertical;
+                background: var(--bg);
+                color: var(--text);
+                outline: none;
+            }
+            textarea.output:focus {
+                border-color: var(--primary);
+            }
+
+            .summary {
+                font-size: 0.8rem;
+                color: var(--muted);
+                margin-top: 0.75rem;
+                padding-top: 0.75rem;
+                border-top: 1px solid var(--border);
+            }
+
+            /* ── Error banner ── */
+            #error-banner {
+                display: none;
+                padding: 0.75rem 1rem;
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                border-radius: var(--radius);
+                color: var(--error);
+                font-size: 0.875rem;
+                margin-bottom: 1.25rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>llms.txt Generator</h1>
+                <p>
+                    Crawl any website and generate an
+                    <a href="https://llmstxt.org" target="_blank" rel="noopener"
+                        ><code>llms.txt</code></a
+                    >
+                    file in seconds.
+                </p>
+            </header>
+
+            <!-- Error banner -->
+            <div id="error-banner"></div>
+
+            <!-- Form -->
+            <div class="card">
+                <div class="card-title">Configuration</div>
+                <form id="generate-form">
+                    <div class="field">
+                        <label for="url-input">Website URL</label>
+                        <input
+                            type="url"
+                            id="url-input"
+                            placeholder="https://example.com"
+                            required
+                            autocomplete="off"
+                            spellcheck="false"
+                        />
+                    </div>
+
+                    <div class="field">
+                        <label>Generation mode</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input
+                                    type="radio"
+                                    name="mode"
+                                    value="basic"
+                                    checked
+                                />
+                                Basic
+                            </label>
+                            <label class="radio-option">
+                                <input
+                                    type="radio"
+                                    name="mode"
+                                    value="enhanced"
+                                />
+                                Enhanced (LLM)
+                            </label>
+                        </div>
+                        <p class="mode-hint" id="mode-hint">
+                            Uses page titles and meta descriptions — no API key
+                            required.
+                        </p>
+                    </div>
+
+                    <div class="field">
+                        <label class="checkbox-option">
+                            <input type="checkbox" id="full-text-checkbox" />
+                            Also generate <code>llms-full.txt</code>
+                        </label>
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                        id="submit-btn"
+                    >
+                        Generate
+                    </button>
+                </form>
+            </div>
+
+            <!-- Progress -->
+            <div class="card" id="progress-section">
+                <div class="card-title">Progress</div>
+                <ul class="progress-list" id="progress-list"></ul>
+            </div>
+
+            <!-- Results -->
+            <div id="results-section">
+                <div class="card">
+                    <div class="card-title">Output</div>
+                    <div class="results-grid" id="results-grid">
+                        <div class="result-block" id="llms-txt-block">
+                            <div class="result-header">
+                                <span class="result-label">llms.txt</span>
+                                <div class="result-actions">
+                                    <button
+                                        class="btn btn-ghost"
+                                        onclick="copyOutput('llms-txt-output', this)"
+                                    >
+                                        Copy
+                                    </button>
+                                    <button
+                                        class="btn btn-ghost"
+                                        onclick="downloadOutput('llms-txt-output', 'llms.txt')"
+                                    >
+                                        Download
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea
+                                class="output"
+                                id="llms-txt-output"
+                                readonly
+                                spellcheck="false"
+                            ></textarea>
+                        </div>
+
+                        <div
+                            class="result-block"
+                            id="llms-full-txt-block"
+                            style="display: none"
+                        >
+                            <div class="result-header">
+                                <span class="result-label">llms-full.txt</span>
+                                <div class="result-actions">
+                                    <button
+                                        class="btn btn-ghost"
+                                        onclick="copyOutput('llms-full-txt-output', this)"
+                                    >
+                                        Copy
+                                    </button>
+                                    <button
+                                        class="btn btn-ghost"
+                                        onclick="downloadOutput('llms-full-txt-output', 'llms-full.txt')"
+                                    >
+                                        Download
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea
+                                class="output"
+                                id="llms-full-txt-output"
+                                readonly
+                                spellcheck="false"
+                            ></textarea>
+                        </div>
+                    </div>
+                    <div class="summary" id="summary"></div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const modeHints = {
+                basic: "Uses page titles and meta descriptions — no API key required.",
+                enhanced:
+                    "LLM generates descriptions from page content — requires a configured API key on the server.",
+            };
+
+            document.querySelectorAll("input[name=mode]").forEach((r) => {
+                r.addEventListener("change", () => {
+                    document.getElementById("mode-hint").textContent =
+                        modeHints[r.value];
+                });
+            });
+
+            document
+                .getElementById("generate-form")
+                .addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    await runGenerate();
+                });
+
+            async function runGenerate() {
+                const url = document.getElementById("url-input").value.trim();
+                const mode = document.querySelector(
+                    "input[name=mode]:checked",
+                ).value;
+                const fullText =
+                    document.getElementById("full-text-checkbox").checked;
+
+                // Reset UI state
+                setError(null);
+                clearProgress();
+                showSection("progress-section", true);
+                showSection("results-section", false);
+                setSubmitLoading(true);
+
+                try {
+                    const response = await fetch("/generate", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            url,
+                            mode,
+                            full_text: fullText,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const text = await response.text();
+                        throw new Error(
+                            text || `Server error: ${response.status}`,
+                        );
+                    }
+
+                    await readSSEStream(response.body);
+                } catch (err) {
+                    setError(err.message);
+                    appendProgress(err.message, "err");
+                } finally {
+                    setSubmitLoading(false);
+                }
+            }
+
+            async function readSSEStream(body) {
+                const reader = body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // SSE lines are separated by \n\n
+                    const parts = buffer.split("\n\n");
+                    buffer = parts.pop(); // last item may be incomplete
+
+                    for (const part of parts) {
+                        for (const line of part.split("\n")) {
+                            if (line.startsWith("data: ")) {
+                                handleEvent(JSON.parse(line.slice(6)));
+                            }
+                        }
+                    }
+                }
+            }
+
+            function handleEvent(ev) {
+                switch (ev.type) {
+                    case "progress":
+                        appendProgress(ev.message, "done");
+                        break;
+                    case "done":
+                        showSection("results-section", true);
+                        setResults(ev);
+                        appendProgress("Done.", "done");
+                        break;
+                    case "error":
+                        setError(ev.message);
+                        appendProgress(ev.message, "err");
+                        break;
+                }
+            }
+
+            // ── Progress helpers ──────────────────────────────────────────────────────
+
+            function clearProgress() {
+                document.getElementById("progress-list").innerHTML = "";
+            }
+
+            function appendProgress(
+                message,
+                state /* 'active' | 'done' | 'err' */,
+            ) {
+                const list = document.getElementById("progress-list");
+
+                // Demote previous active item to done
+                list.querySelectorAll(".dot.active").forEach((d) => {
+                    d.className = "dot done";
+                    d.closest("li").className = "done";
+                });
+                list.querySelectorAll(".spinner").forEach((s) => {
+                    const dot = document.createElement("span");
+                    dot.className = "dot done";
+                    s.replaceWith(dot);
+                });
+
+                const li = document.createElement("li");
+                li.className = state;
+
+                const indicator = document.createElement("span");
+                if (state === "active") {
+                    indicator.className = "spinner";
+                } else {
+                    indicator.className = `dot ${state}`;
+                }
+
+                li.appendChild(indicator);
+                li.appendChild(document.createTextNode(message));
+                list.appendChild(li);
+                list.scrollTop = list.scrollHeight;
+            }
+
+            // ── Results helpers ───────────────────────────────────────────────────────
+
+            function setResults(ev) {
+                document.getElementById("llms-txt-output").value =
+                    ev.llms_txt || "";
+
+                const hasFullTxt = !!ev.llms_full_txt;
+                document.getElementById("llms-full-txt-block").style.display =
+                    hasFullTxt ? "" : "none";
+                if (hasFullTxt) {
+                    document.getElementById("llms-full-txt-output").value =
+                        ev.llms_full_txt;
+                }
+
+                const grid = document.getElementById("results-grid");
+                grid.className = hasFullTxt
+                    ? "results-grid has-full"
+                    : "results-grid";
+
+                if (ev.summary) {
+                    document.getElementById("summary").textContent = ev.summary;
+                }
+            }
+
+            function copyOutput(id, btn) {
+                const text = document.getElementById(id).value;
+                navigator.clipboard.writeText(text).then(() => {
+                    const orig = btn.textContent;
+                    btn.textContent = "Copied!";
+                    setTimeout(() => (btn.textContent = orig), 1500);
+                });
+            }
+
+            function downloadOutput(id, filename) {
+                const text = document.getElementById(id).value;
+                const blob = new Blob([text], { type: "text/plain" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            }
+
+            // ── UI state helpers ──────────────────────────────────────────────────────
+
+            function showSection(id, visible) {
+                document.getElementById(id).style.display = visible
+                    ? "block"
+                    : "none";
+            }
+
+            function setSubmitLoading(loading) {
+                const btn = document.getElementById("submit-btn");
+                btn.disabled = loading;
+                btn.textContent = loading ? "Generating…" : "Generate";
+            }
+
+            function setError(msg) {
+                const banner = document.getElementById("error-banner");
+                if (msg) {
+                    banner.textContent = msg;
+                    banner.style.display = "";
+                } else {
+                    banner.style.display = "none";
+                }
+            }
+        </script>
+    </body>
+</html>
