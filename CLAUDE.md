@@ -5,17 +5,13 @@ Development guide for the llms.txt Generator.
 ## Commands
 
 ```bash
-# Run locally
-LLM_TXT_ENV_FILE=.env go run .
+make run      # run locally (requires .env)
+make build    # build to bin/llm-txt
+make test     # run all tests
+make tidy     # go mod tidy && go mod vendor
 
-# Build
-go build -o bin/llm-txt .
-
-# Test
-go test ./...
-
-# Add a dependency (always vendor)
-go get <pkg> && go mod tidy && go mod vendor
+# Add a dependency
+go get <pkg> && make tidy
 ```
 
 ## Project Structure
