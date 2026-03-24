@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/noahschumacher/llm-txt/crawler"
 	"github.com/noahschumacher/llm-txt/pkg"
 	"github.com/noahschumacher/llm-txt/server"
 )
@@ -101,6 +102,12 @@ func main() {
 	srv := server.New(logger, server.Config{
 		Port:   AppPort,
 		AppEnv: AppEnv,
+		CrawlConfig: crawler.Config{
+			MaxPages: CrawlMaxPages,
+			MaxDepth: CrawlMaxDepth,
+			DelayMS:  CrawlDelayMS,
+			Log:      logger,
+		},
 	}, staticFS)
 
 	serverErrors := make(chan error, 1)

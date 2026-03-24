@@ -10,12 +10,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
 
+	"github.com/noahschumacher/llm-txt/crawler"
 	mw "github.com/noahschumacher/llm-txt/server/middleware"
 )
 
 type Config struct {
-	Port   string
-	AppEnv string
+	Port        string
+	AppEnv      string
+	CrawlConfig crawler.Config
 }
 
 type Server struct {

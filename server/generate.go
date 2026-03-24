@@ -8,8 +8,14 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/noahschumacher/llm-txt/crawler"
 )
+
+// crawlProgress is passed to crawler.Crawl so the handler can stream events.
+type crawlProgress func(msg string)
 
 type generateRequest struct {
 	URL      string `json:"url"`
@@ -84,44 +90,22 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Sugar().Infof("generate request: url=%s mode=%s full_text=%v", req.URL, req.Mode, req.FullText)
+	s.log.Info("generate request", zap.String("url", req.URL), zap.String("mode", req.Mode), zap.Bool("full_text", req.FullText))
 
-	// TODO: replace with real crawler + generator pipeline
-	steps := []string{
-		"Validating URL...",
-		"Fetching robots.txt...",
-		"Discovering sitemap...",
-		"Crawling pages...",
-		"Inferring sections...",
+	sse.progress("Fetching robots.txt and sitemap...")
+	pages, err := crawler.Crawl(r.Context(), req.URL, s.cfg.CrawlConfig)
+	if err != nil && len(pages) == 0 {
+		s.log.Error("crawl failed", zap.Error(err))
+		sse.error("crawl failed: " + err.Error())
+		return
 	}
-	for _, step := range steps {
-		sse.progress(step)
-		time.Sleep(time.Second)
-	}
+	sse.progress(fmt.Sprintf("Crawled %d pages. Formatting output...", len(pages)))
 
+	llmsTxt := formatLLMsTxt(req.URL, pages)
 	sse.send(sseEvent{
-		Type: "done",
-		LLMsTxt: `# Example Site
-
-> A platform for developers to discover and share code snippets, tools, and resources.
-
-## Docs
-
-- [Getting Started](https://example.com/docs/getting-started): Introduction to the platform, account setup, and first steps.
-- [API Reference](https://example.com/docs/api): Full reference for the REST API including authentication and endpoints.
-- [SDKs](https://example.com/docs/sdks): Official client libraries for Python, Go, TypeScript, and Ruby.
-
-## Blog
-
-- [What's New in v3](https://example.com/blog/whats-new-v3): Overview of the major features and breaking changes in the v3 release.
-- [Building with the API](https://example.com/blog/building-with-api): A walkthrough of a real integration built on top of the public API.
-
-## About
-
-- [About Us](https://example.com/about): Mission, team, and company background.
-- [Pricing](https://example.com/pricing): Plan comparison and pricing details for individuals and teams.
-`,
-		Summary: "7 pages crawled · 3 sections · mode: " + req.Mode,
+		Type:    "done",
+		LLMsTxt: llmsTxt,
+		Summary: fmt.Sprintf("%d pages crawled · mode: %s", len(pages), req.Mode),
 	})
 }
 
@@ -148,6 +132,104 @@ func parseGenerateRequest(body io.Reader) (generateRequest, error) {
 		req.Mode = "basic"
 	}
 	return req, nil
+}
+
+// formatLLMsTxt assembles a basic llms.txt from crawled pages.
+// Pages are grouped into sections by their first URL path segment
+// (e.g. /docs/* → "Docs"). Pages at the root go into a "General" section.
+func formatLLMsTxt(origin string, pages []crawler.Page) string {
+	// Find the root page description to use as the site-level blockquote
+	// and as a filter — pages that share it have no unique description.
+	var rootDesc string
+	for _, p := range pages {
+		if p.URL == origin || p.URL == origin+"/" {
+			rootDesc = p.Description
+			break
+		}
+	}
+
+	// Collect section names in insertion order, skipping pages that add no
+	// unique value (same description as root = inherited global meta tag).
+	order := make([]string, 0, len(pages))
+	sections := make(map[string][]crawler.Page, len(pages))
+
+	for _, p := range pages {
+		isRoot := p.URL == origin || p.URL == origin+"/"
+		if isRoot {
+			continue // root is already represented by the H1 + blockquote
+		}
+		if p.Description == rootDesc {
+			continue // inherited global meta, no unique content
+		}
+		sec := sectionName(p.URL, origin)
+		if _, exists := sections[sec]; !exists {
+			order = append(order, sec)
+		}
+		sections[sec] = append(sections[sec], p)
+	}
+
+	host := strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
+	var b strings.Builder
+	fmt.Fprintf(&b, "# %s\n\n", host)
+
+	if rootDesc != "" {
+		fmt.Fprintf(&b, "> %s\n\n", firstSentence(rootDesc))
+	}
+
+	for _, sec := range order {
+		fmt.Fprintf(&b, "## %s\n\n", sec)
+		for _, p := range sections[sec] {
+			title := p.Title
+			if title == "" {
+				title = p.URL
+			}
+			desc := p.Description
+			if desc == "" {
+				desc = firstSentence(p.Body)
+			}
+			if desc != "" {
+				fmt.Fprintf(&b, "- [%s](%s): %s\n", title, p.URL, desc)
+			} else {
+				fmt.Fprintf(&b, "- [%s](%s)\n", title, p.URL)
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// sectionName infers a display section from the first path segment of u.
+func sectionName(u, origin string) string {
+	path := strings.TrimPrefix(u, origin)
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		return "General"
+	}
+	seg := strings.SplitN(path, "/", 2)[0]
+	// Strip query strings from the segment.
+	seg = strings.SplitN(seg, "?", 2)[0]
+	if seg == "" {
+		return "General"
+	}
+	return strings.ToUpper(seg[:1]) + seg[1:]
+}
+
+// firstSentence returns the first sentence of text (up to 160 chars).
+func firstSentence(text string) string {
+	text = strings.TrimSpace(text)
+	if len(text) == 0 {
+		return ""
+	}
+	for i, ch := range text {
+		if (ch == '.' || ch == '!' || ch == '?') && i > 0 {
+			return text[:i+1]
+		}
+	}
+	if len(text) > 160 {
+		return text[:160] + "..."
+	}
+	return text
 }
 
 // normalizeURL ensures the URL has a scheme and strips path/query/fragment

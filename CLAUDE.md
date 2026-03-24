@@ -10,8 +10,8 @@ make build    # build to bin/llm-txt
 make test     # run all tests
 make tidy     # go mod tidy && go mod vendor
 
-# Add a dependency
-go get <pkg> && make tidy
+# Add a dependency — import it in code first, then run:
+make tidy        # resolves, downloads, and vendors the package
 ```
 
 ## Project Structure
@@ -109,6 +109,14 @@ s.router.Post("/stream", s.handleStream) // no timeout
 - **Naming:** Go conventions — `userID` not `user_id`, `llmClient` not `LLMClient`.
 - **Dependencies:** always run `go mod tidy && go mod vendor` after adding/removing
   packages.
+- **Slices:** always initialize with `make([]T, 0)`, never `[]T{}`. Pass a
+  capacity hint whenever it's known ahead of time
+  (e.g. `make([]T, 0, len(input))`). This avoids unnecessary reallocations
+  and makes the intended size explicit at the call site.
+- **Maps:** always initialize with `make(map[K]V)`, never `map[K]V{}`. Pass
+  a size hint whenever it's known (e.g. `make(map[K]V, len(input))`). Maps
+  are especially important to pre-size — a zero-hint map rehashes
+  aggressively as it grows, which is more expensive than slice reallocation.
 
 ## Environment
 
