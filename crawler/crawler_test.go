@@ -101,14 +101,14 @@ func TestExtract(t *testing.T) {
 
 func TestResolveLink(t *testing.T) {
 	cases := []struct {
-		href    string
-		base    string
-		want    string
+		href string
+		base string
+		want string
 	}{
 		{"/about", "https://example.com", "https://example.com/about"},
 		{"https://other.com/page", "https://example.com", "https://other.com/page"},
-		{"#section", "https://example.com/page", ""},          // fragment-only
-		{"mailto:foo@bar.com", "https://example.com", ""},     // non-http
+		{"#section", "https://example.com/page", ""},                              // fragment-only
+		{"mailto:foo@bar.com", "https://example.com", ""},                         // non-http
 		{"page?q=1#frag", "https://example.com/", "https://example.com/page?q=1"}, // fragment stripped
 	}
 	for _, tc := range cases {
@@ -193,7 +193,7 @@ func TestCrawl_BasicBFS(t *testing.T) {
 	defer srv.Close()
 
 	cfg := Config{MaxPages: 10, MaxDepth: 2, DelayMS: 0}
-	pages, err := Crawl(context.Background(), srv.URL, cfg)
+	pages, err := New(cfg, nil).Crawl(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestCrawl_RespectsRobots(t *testing.T) {
 	defer srv.Close()
 
 	cfg := Config{MaxPages: 10, MaxDepth: 2, DelayMS: 0}
-	pages, err := Crawl(context.Background(), srv.URL, cfg)
+	pages, err := New(cfg, nil).Crawl(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestCrawl_MaxPages(t *testing.T) {
 	defer srv.Close()
 
 	cfg := Config{MaxPages: 3, MaxDepth: 3, DelayMS: 0}
-	pages, err := Crawl(context.Background(), srv.URL, cfg)
+	pages, err := New(cfg, nil).Crawl(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

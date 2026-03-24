@@ -14,9 +14,6 @@ import (
 	"github.com/noahschumacher/llm-txt/crawler"
 )
 
-// crawlProgress is passed to crawler.Crawl so the handler can stream events.
-type crawlProgress func(msg string)
-
 type generateRequest struct {
 	URL      string `json:"url"`
 	Mode     string `json:"mode"` // "basic" | "enhanced"
@@ -28,6 +25,8 @@ type sseEvent struct {
 
 	// progress
 	Message string `json:"message,omitempty"`
+	Crawled int    `json:"crawled,omitempty"` // pages fetched so far
+	Total   int    `json:"total,omitempty"`   // max pages (upper bound)
 
 	// done
 	LLMsTxt     string `json:"llms_txt,omitempty"`
@@ -92,8 +91,23 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 	s.log.Info("generate request", zap.String("url", req.URL), zap.String("mode", req.Mode), zap.Bool("full_text", req.FullText))
 
+	maxPages := s.cfg.CrawlConfig.MaxPages
+	if maxPages == 0 {
+		maxPages = 50
+	}
+
+	c := crawler.New(s.cfg.CrawlConfig, s.log)
+	c.OnPage = func(crawled int) {
+		sse.send(sseEvent{
+			Type:    "progress",
+			Message: "Crawling...",
+			Crawled: crawled,
+			Total:   maxPages,
+		})
+	}
+
 	sse.progress("Fetching robots.txt and sitemap...")
-	pages, err := crawler.Crawl(r.Context(), req.URL, s.cfg.CrawlConfig)
+	pages, err := c.Crawl(r.Context(), req.URL)
 	if err != nil && len(pages) == 0 {
 		s.log.Error("crawl failed", zap.Error(err))
 		sse.error("crawl failed: " + err.Error())

@@ -208,6 +208,20 @@
             #progress-section {
                 display: none;
             }
+            .progress-bar-wrap {
+                height: 6px;
+                background: var(--border);
+                border-radius: 999px;
+                overflow: hidden;
+                margin-bottom: 1rem;
+            }
+            .progress-bar-fill {
+                height: 100%;
+                background: var(--primary);
+                border-radius: 999px;
+                width: 0%;
+                transition: width 0.3s ease;
+            }
             .progress-list {
                 list-style: none;
                 font-size: 0.875rem;
@@ -417,6 +431,9 @@
             <!-- Progress -->
             <div class="card" id="progress-section">
                 <div class="card-title">Progress</div>
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar-fill" id="progress-bar-fill"></div>
+                </div>
                 <ul class="progress-list" id="progress-list"></ul>
             </div>
 
@@ -592,9 +609,14 @@
             function handleEvent(ev) {
                 switch (ev.type) {
                     case "progress":
-                        appendProgress(ev.message, "done");
+                        if (ev.crawled && ev.total) {
+                            setActiveCrawl(ev.message, ev.crawled, ev.total);
+                        } else {
+                            appendProgress(ev.message, "active");
+                        }
                         break;
                     case "done":
+                        document.getElementById("progress-bar-fill").style.width = "100%";
                         showSection("results-section", true);
                         setResults(ev);
                         appendProgress("Done.", "done");
@@ -608,8 +630,12 @@
 
             // ── Progress helpers ──────────────────────────────────────────────────────
 
+            let crawlLi = null;
+
             function clearProgress() {
                 document.getElementById("progress-list").innerHTML = "";
+                document.getElementById("progress-bar-fill").style.width = "0%";
+                crawlLi = null;
             }
 
             function appendProgress(
@@ -628,6 +654,7 @@
                     dot.className = "dot done";
                     s.replaceWith(dot);
                 });
+                crawlLi = null;
 
                 const li = document.createElement("li");
                 li.className = state;
@@ -642,6 +669,34 @@
                 li.appendChild(indicator);
                 li.appendChild(document.createTextNode(message));
                 list.appendChild(li);
+                list.scrollTop = list.scrollHeight;
+            }
+
+            // Updates the progress bar and, on the first call, appends the crawl list item.
+            function setActiveCrawl(message, crawled, total) {
+                document.getElementById("progress-bar-fill").style.width =
+                    Math.round((crawled / total) * 100) + "%";
+
+                if (crawlLi) return;
+
+                // First crawl event — demote previous active items, then append.
+                const list = document.getElementById("progress-list");
+                list.querySelectorAll(".dot.active").forEach((d) => {
+                    d.className = "dot done";
+                    d.closest("li").className = "done";
+                });
+                list.querySelectorAll(".spinner").forEach((s) => {
+                    const dot = document.createElement("span");
+                    dot.className = "dot done";
+                    s.replaceWith(dot);
+                });
+                crawlLi = document.createElement("li");
+                crawlLi.className = "active";
+                const spinner = document.createElement("span");
+                spinner.className = "spinner";
+                crawlLi.appendChild(spinner);
+                crawlLi.appendChild(document.createTextNode(message));
+                list.appendChild(crawlLi);
                 list.scrollTop = list.scrollHeight;
             }
 

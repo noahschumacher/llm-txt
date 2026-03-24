@@ -106,7 +106,6 @@ func main() {
 			MaxPages: CrawlMaxPages,
 			MaxDepth: CrawlMaxDepth,
 			DelayMS:  CrawlDelayMS,
-			Log:      logger,
 		},
 	}, staticFS)
 

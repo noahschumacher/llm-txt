@@ -21,17 +21,9 @@ type Page struct {
 
 // Config controls crawl behavior. Zero values apply the defaults shown below.
 type Config struct {
-	MaxPages int         // default 50
-	MaxDepth int         // default 3
-	DelayMS  int         // default 500
-	Log      *zap.Logger // optional; debug logs suppressed if nil
-}
-
-func (c Config) log() *zap.Logger {
-	if c.Log != nil {
-		return c.Log
-	}
-	return zap.NewNop()
+	MaxPages int // default 50
+	MaxDepth int // default 3
+	DelayMS  int // default 500
 }
 
 func (c Config) maxPages() int {
@@ -60,20 +52,39 @@ type queueItem struct {
 	depth int
 }
 
+// Crawler fetches pages reachable from a given origin.
+type Crawler struct {
+	cfg    Config
+	log    *zap.Logger
+	client *http.Client
+	// OnPage is called after each page is successfully fetched.
+	// crawled is the running total of pages collected so far.
+	OnPage func(crawled int)
+}
+
+// New creates a Crawler with the given config. If log is nil, debug output is suppressed.
+func New(cfg Config, log *zap.Logger) *Crawler {
+	if log == nil {
+		log = zap.NewNop()
+	}
+	return &Crawler{
+		cfg:    cfg,
+		log:    log,
+		client: &http.Client{Timeout: 15 * time.Second},
+	}
+}
+
 // Crawl fetches pages reachable from origin up to the configured depth and
 // page limits. It respects robots.txt and uses sitemap.xml to seed the queue
 // when available.
-func Crawl(ctx context.Context, origin string, cfg Config) ([]Page, error) {
-	log := cfg.log()
-	client := &http.Client{Timeout: 15 * time.Second}
-
-	rb := fetchRobots(ctx, client, origin)
-	seeds := fetchSitemapURLs(ctx, client, origin)
+func (c *Crawler) Crawl(ctx context.Context, origin string) ([]Page, error) {
+	rb := fetchRobots(ctx, c.client, origin)
+	seeds := fetchSitemapURLs(ctx, c.client, origin)
 
 	visited := mapset.NewSet[string]()
-	pages := make([]Page, 0, cfg.maxPages())
+	pages := make([]Page, 0, c.cfg.maxPages())
 
-	queue := make([]queueItem, 0, cfg.maxPages())
+	queue := make([]queueItem, 0, c.cfg.maxPages())
 	queue = append(queue, queueItem{url: origin, depth: 0})
 	visited.Add(normalizeURL(origin))
 
@@ -86,9 +97,9 @@ func Crawl(ctx context.Context, origin string, cfg Config) ([]Page, error) {
 		}
 	}
 
-	log.Debug("crawl starting", zap.String("origin", origin), zap.Int("queue_seed", len(queue)))
+	c.log.Debug("crawl starting", zap.String("origin", origin), zap.Int("queue_seed", len(queue)))
 
-	for len(queue) > 0 && len(pages) < cfg.maxPages() {
+	for len(queue) > 0 && len(pages) < c.cfg.maxPages() {
 		if ctx.Err() != nil {
 			return pages, ctx.Err()
 		}
@@ -97,22 +108,26 @@ func Crawl(ctx context.Context, origin string, cfg Config) ([]Page, error) {
 		queue = queue[1:]
 
 		if !rb.allowed(item.url) {
-			log.Debug("skipped (robots)", zap.String("url", item.url))
+			c.log.Debug("skipped (robots)", zap.String("url", item.url))
 			continue
 		}
 
-		log.Debug("fetching", zap.String("url", item.url), zap.Int("depth", item.depth))
+		c.log.Debug("fetching", zap.String("url", item.url), zap.Int("depth", item.depth))
 
-		page, links, ok := fetchPage(ctx, client, item.url, item.depth)
+		page, links, ok := fetchPage(ctx, c.client, item.url, item.depth)
 		if !ok {
-			log.Debug("skipped (non-html or error)", zap.String("url", item.url))
+			c.log.Debug("skipped (non-html or error)", zap.String("url", item.url))
 			continue
 		}
 		pages = append(pages, page)
 
+		if c.OnPage != nil {
+			c.OnPage(len(pages))
+		}
+
 		// Enqueue new links if we haven't hit depth/page limits yet.
 		enqueued := 0
-		if item.depth < cfg.maxDepth() {
+		if item.depth < c.cfg.maxDepth() {
 			for _, link := range links {
 				if !sameHost(link, origin) {
 					continue
@@ -129,7 +144,7 @@ func Crawl(ctx context.Context, origin string, cfg Config) ([]Page, error) {
 			}
 		}
 
-		log.Debug("fetched",
+		c.log.Debug("fetched",
 			zap.String("url", item.url),
 			zap.Int("links_found", len(links)),
 			zap.Int("enqueued", enqueued),
@@ -138,11 +153,11 @@ func Crawl(ctx context.Context, origin string, cfg Config) ([]Page, error) {
 		)
 
 		if len(queue) > 0 {
-			time.Sleep(cfg.delay())
+			time.Sleep(c.cfg.delay())
 		}
 	}
 
-	log.Debug("crawl complete", zap.String("origin", origin), zap.Int("pages", len(pages)))
+	c.log.Debug("crawl complete", zap.String("origin", origin), zap.Int("pages", len(pages)))
 	return pages, nil
 }
 
