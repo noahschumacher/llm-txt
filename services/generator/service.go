@@ -53,15 +53,14 @@ func (s *Service) Generate(ctx context.Context, pages []crawler.Page, opts Optio
 // describe replaces each page's Description with an LLM-generated one.
 // The root page is skipped so its original meta description is preserved.
 func (s *Service) describe(ctx context.Context, pages []crawler.Page, origin string, onDone func(int)) []crawler.Page {
-	bodies := make([]string, len(pages))
+	ctxs := make([]llm.PageContext, len(pages))
 	for i, p := range pages {
-		// send empty body for root so DescribeAll skips it (empty → no LLM call needed)
 		if p.URL != origin && p.URL != origin+"/" {
-			bodies[i] = p.Body
+			ctxs[i] = llm.PageContext{URL: p.URL, Title: p.Title, Body: p.Body}
 		}
 	}
 
-	descs := llm.DescribeAll(ctx, s.llmClient, bodies, s.concurrency, onDone, s.log)
+	descs := llm.DescribeAll(ctx, s.llmClient, ctxs, s.concurrency, onDone, s.log)
 
 	// copy pages so we don't mutate the caller's slice
 	out := make([]crawler.Page, len(pages))

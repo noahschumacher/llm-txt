@@ -7,13 +7,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// DescribeAll calls Describe concurrently for each body, respecting the
+// DescribeAll calls Describe concurrently for each page, respecting the
 // concurrency limit. Results are returned in the same order as inputs. If any
 // call fails, its slot in the output is an empty string (non-fatal).
 func DescribeAll(
 	ctx context.Context,
 	d Describer,
-	bodies []string,
+	pages []PageContext,
 	concurrency int,
 	onDone func(completed int),
 	log *zap.Logger,
@@ -23,21 +23,21 @@ func DescribeAll(
 	}
 
 	var (
-		results   = make([]string, len(bodies))
+		results   = make([]string, len(pages))
 		sem       = make(chan struct{}, concurrency)
 		mu        sync.Mutex
 		wg        sync.WaitGroup
 		completed = 0
 	)
 
-	for i, body := range bodies {
+	for i, page := range pages {
 		wg.Go(func() {
 			sem <- struct{}{}        // acquire slot — blocks when concurrency limit is reached
 			defer func() { <-sem }() // release slot when done
 
-			if body == "" {
+			if page.Body == "" {
 				// empty body signals skip (e.g. root page)
-			} else if desc, err := d.Describe(ctx, body); err != nil {
+			} else if desc, err := d.Describe(ctx, page); err != nil {
 				log.Warn("llm describe failed", zap.Error(err))
 			} else {
 				results[i] = desc // safe: each goroutine writes its own index

@@ -18,6 +18,13 @@ Every page fetch is currently sequential — we wait for one HTTP response befor
 
 **Concurrency knob.** Add `Concurrency int` to `crawler.Config` (default 1, preserving current behavior). The server can expose this via a new `CRAWL_CONCURRENCY` env var.
 
+**UI control.** Expose as a "Crawl speed" toggle in the UI — three levels:
+- Standard (1 worker, ~500ms delay) — polite, safe for any site
+- Fast (3 workers, ~200ms delay) — good for most sites, may cause 429s on rate-limited APIs
+- Turbo (5 workers, ~100ms delay) — fastest, results may vary
+
+Show a hint next to Fast/Turbo: "faster crawl, may miss pages on rate-limited sites". This gives users control without exposing raw numbers and sets expectations about tradeoffs.
+
 ## Considerations
 
 - Start conservative — 3–5 workers gives most of the speedup without risking 429s

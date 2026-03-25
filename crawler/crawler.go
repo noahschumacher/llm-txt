@@ -21,9 +21,10 @@ type Page struct {
 
 // Config controls crawl behavior. Zero values apply the defaults shown below.
 type Config struct {
-	MaxPages int // default 50
-	MaxDepth int // default 3
-	DelayMS  int // default 500
+	MaxPages    int // default 50
+	MaxDepth    int // default 3
+	DelayMS     int // default 500
+	Concurrency int // default 1 (sequential)
 }
 
 func (c Config) maxPages() int {
@@ -45,6 +46,13 @@ func (c Config) delay() time.Duration {
 		return time.Duration(c.DelayMS) * time.Millisecond
 	}
 	return 500 * time.Millisecond
+}
+
+func (c Config) concurrency() int {
+	if c.Concurrency > 1 {
+		return c.Concurrency
+	}
+	return 1
 }
 
 type queueItem struct {
@@ -99,61 +107,84 @@ func (c *Crawler) Crawl(ctx context.Context, origin string) ([]Page, error) {
 
 	c.log.Debug("crawl starting", zap.String("origin", origin), zap.Int("queue_seed", len(queue)))
 
-	for len(queue) > 0 && len(pages) < c.cfg.maxPages() {
+	type fetchResult struct {
+		page  Page
+		links []string
+		item  queueItem
+		ok    bool
+	}
+
+	concurrency := c.cfg.concurrency()
+	results := make(chan fetchResult, concurrency)
+	// Ticker paces dispatches: delay/concurrency keeps total rate = 1/delay per worker.
+	tickInterval := c.cfg.delay()
+	if concurrency > 1 {
+		tickInterval = c.cfg.delay() / time.Duration(concurrency)
+	}
+	ticker := time.NewTicker(tickInterval)
+	defer ticker.Stop()
+
+	inFlight := 0
+	maxP := c.cfg.maxPages()
+
+	dispatch := func() {
+		for len(queue) > 0 && inFlight < concurrency && len(pages)+inFlight < maxP {
+			item := queue[0]
+			queue = queue[1:]
+			if !rb.allowed(item.url) {
+				c.log.Debug("skipped (robots)", zap.String("url", item.url))
+				continue
+			}
+			c.log.Debug("fetching", zap.String("url", item.url), zap.Int("depth", item.depth))
+			inFlight++
+			go func(it queueItem) {
+				page, links, ok := fetchPage(ctx, c.client, it.url, it.depth)
+				results <- fetchResult{page, links, it, ok}
+			}(item)
+		}
+	}
+
+	for (len(queue) > 0 || inFlight > 0) && len(pages) < maxP {
 		if ctx.Err() != nil {
 			return pages, ctx.Err()
 		}
 
-		item := queue[0]
-		queue = queue[1:]
-
-		if !rb.allowed(item.url) {
-			c.log.Debug("skipped (robots)", zap.String("url", item.url))
-			continue
-		}
-
-		c.log.Debug("fetching", zap.String("url", item.url), zap.Int("depth", item.depth))
-
-		page, links, ok := fetchPage(ctx, c.client, item.url, item.depth)
-		if !ok {
-			c.log.Debug("skipped (non-html or error)", zap.String("url", item.url))
-			continue
-		}
-		pages = append(pages, page)
-
-		if c.OnPage != nil {
-			c.OnPage(len(pages))
-		}
-
-		// Enqueue new links if we haven't hit depth/page limits yet.
-		enqueued := 0
-		if item.depth < c.cfg.maxDepth() {
-			for _, link := range links {
-				if !sameHost(link, origin) {
-					continue
-				}
-				if shouldSkip(link) {
-					continue
-				}
-				n := normalizeURL(link)
-				if !visited.Contains(n) {
-					visited.Add(n)
-					queue = append(queue, queueItem{url: link, depth: item.depth + 1})
-					enqueued++
+		select {
+		case <-ticker.C:
+			dispatch()
+		case r := <-results:
+			inFlight--
+			if !r.ok {
+				c.log.Debug("skipped (non-html or error)", zap.String("url", r.item.url))
+				continue
+			}
+			pages = append(pages, r.page)
+			if c.OnPage != nil {
+				c.OnPage(len(pages))
+			}
+			enqueued := 0
+			if r.item.depth < c.cfg.maxDepth() {
+				for _, link := range r.links {
+					if !sameHost(link, origin) || shouldSkip(link) {
+						continue
+					}
+					n := normalizeURL(link)
+					if !visited.Contains(n) {
+						visited.Add(n)
+						queue = append(queue, queueItem{url: link, depth: r.item.depth + 1})
+						enqueued++
+					}
 				}
 			}
-		}
-
-		c.log.Debug("fetched",
-			zap.String("url", item.url),
-			zap.Int("links_found", len(links)),
-			zap.Int("enqueued", enqueued),
-			zap.Int("queue_len", len(queue)),
-			zap.Int("pages_collected", len(pages)),
-		)
-
-		if len(queue) > 0 {
-			time.Sleep(c.cfg.delay())
+			c.log.Debug("fetched",
+				zap.String("url", r.item.url),
+				zap.Int("links_found", len(r.links)),
+				zap.Int("enqueued", enqueued),
+				zap.Int("queue_len", len(queue)),
+				zap.Int("pages_collected", len(pages)),
+			)
+		case <-ctx.Done():
+			return pages, ctx.Err()
 		}
 	}
 
@@ -175,6 +206,11 @@ func fetchPage(ctx context.Context, client *http.Client, rawURL string, depth in
 		return Page{}, nil, false
 	}
 	defer resp.Body.Close()
+
+	// Reject pages that redirected off-domain (e.g. go.dev/issue → github.com).
+	if resp.Request.URL.Host != req.URL.Host {
+		return Page{}, nil, false
+	}
 
 	ct := resp.Header.Get("Content-Type")
 	if !strings.Contains(ct, "text/html") {

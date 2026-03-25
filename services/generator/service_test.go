@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/noahschumacher/llm-txt/clients/llm"
 	"github.com/noahschumacher/llm-txt/crawler"
 )
 
@@ -16,7 +17,7 @@ type mockDescriber struct {
 	calls int
 }
 
-func (m *mockDescriber) Describe(_ context.Context, _ string) (string, error) {
+func (m *mockDescriber) Describe(_ context.Context, _ llm.PageContext) (string, error) {
 	m.calls++
 	return m.desc, nil
 }

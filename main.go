@@ -53,9 +53,10 @@ func main() {
 	)
 
 	var (
-		CrawlMaxPages = pkg.LoadIntEnv("CRAWL_MAX_PAGES", false)
-		CrawlMaxDepth = pkg.LoadIntEnv("CRAWL_MAX_DEPTH", false)
-		CrawlDelayMS  = pkg.LoadIntEnv("CRAWL_DELAY_MS", false)
+		CrawlMaxPages    = pkg.LoadIntEnv("CRAWL_MAX_PAGES", false)
+		CrawlMaxDepth    = pkg.LoadIntEnv("CRAWL_MAX_DEPTH", false)
+		CrawlDelayMS     = pkg.LoadIntEnv("CRAWL_DELAY_MS", false)
+		CrawlConcurrency = pkg.LoadIntEnv("CRAWL_CONCURRENCY", false)
 	)
 
 	// -------------------------------------------------------------------------
@@ -89,6 +90,7 @@ func main() {
 		zap.Int("crawl_max_pages", CrawlMaxPages),
 		zap.Int("crawl_max_depth", CrawlMaxDepth),
 		zap.Int("crawl_delay_ms", CrawlDelayMS),
+		zap.Int("crawl_concurrency", CrawlConcurrency),
 	)
 
 	// -------------------------------------------------------------------------
@@ -118,9 +120,10 @@ func main() {
 		Port:   AppPort,
 		AppEnv: AppEnv,
 		CrawlConfig: crawler.Config{
-			MaxPages: CrawlMaxPages,
-			MaxDepth: CrawlMaxDepth,
-			DelayMS:  CrawlDelayMS,
+			MaxPages:    CrawlMaxPages,
+			MaxDepth:    CrawlMaxDepth,
+			DelayMS:     CrawlDelayMS,
+			Concurrency: CrawlConcurrency,
 		},
 	}, staticFS, gen)
 

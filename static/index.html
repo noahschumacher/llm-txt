@@ -447,6 +447,25 @@
                         </div>
                     </div>
 
+                    <div class="field" style="margin-bottom: 1.1rem;">
+                        <label>Crawl speed</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="concurrency" value="1" checked />
+                                Standard
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="concurrency" value="3" />
+                                Fast
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="concurrency" value="5" />
+                                Turbo
+                            </label>
+                        </div>
+                        <p class="mode-hint">Faster speeds may miss pages on rate-limited sites.</p>
+                    </div>
+
                     <button
                         type="submit"
                         class="btn btn-primary"
@@ -546,6 +565,7 @@
                 ).value;
                 const maxPages = Math.min(200, Math.max(10, parseInt(document.getElementById("max-pages-input").value, 10) || 50));
                 const maxDepth = Math.min(5, Math.max(1, parseInt(document.getElementById("max-depth-input").value, 10) || 3));
+                const concurrency = parseInt(document.querySelector("input[name=concurrency]:checked").value, 10);
 
                 // Reset UI state
                 setError(null);
@@ -563,6 +583,7 @@
                             mode,
                             max_pages: maxPages,
                             max_depth: maxDepth,
+                            concurrency,
                         }),
                     });
 

@@ -20,10 +20,11 @@ import (
 )
 
 type generateRequest struct {
-	URL      string `json:"url"`
-	Mode     string `json:"mode"` // "basic" | "enhanced"
-	MaxPages int    `json:"max_pages"`
-	MaxDepth int    `json:"max_depth"`
+	URL         string `json:"url"`
+	Mode        string `json:"mode"` // "basic" | "enhanced"
+	MaxPages    int    `json:"max_pages"`
+	MaxDepth    int    `json:"max_depth"`
+	Concurrency int    `json:"concurrency"` // 1=standard, 3=fast, 5=turbo
 }
 
 type sseEvent struct {
@@ -100,6 +101,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		zap.String("mode", req.Mode),
 		zap.Int("max_pages", req.MaxPages),
 		zap.Int("max_depth", req.MaxDepth),
+		zap.Int("concurrency", req.Concurrency),
 	)
 
 	cfg := s.cfg.CrawlConfig
@@ -108,6 +110,9 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.MaxDepth > 0 {
 		cfg.MaxDepth = req.MaxDepth
+	}
+	if req.Concurrency > 0 {
+		cfg.Concurrency = req.Concurrency
 	}
 	maxPages := cfg.MaxPages
 	if maxPages == 0 {

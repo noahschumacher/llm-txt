@@ -18,9 +18,16 @@ const (
 	openaiProvider    = "openai"
 )
 
+// PageContext holds the context passed to the LLM for a single page.
+type PageContext struct {
+	URL   string
+	Title string
+	Body  string
+}
+
 // Describer generates a one-sentence description of a web page from its body text.
 type Describer interface {
-	Describe(ctx context.Context, body string) (string, error)
+	Describe(ctx context.Context, p PageContext) (string, error)
 }
 
 // New returns a Describer for the given provider ("anthropic" or "openai").
@@ -49,6 +56,9 @@ Use a noun phrase or verb-first style (e.g. "Covers...", "Documents...", "Explai
 Do not start with "This page", "This web page", or "This webpage".
 Reply with only the description — no preamble, no quotes.
 
+URL: %s
+Title: %s
+
 <content>
 %s
 </content>`
@@ -65,14 +75,14 @@ type anthropicClient struct {
 	log    *zap.Logger
 }
 
-func (c *anthropicClient) Describe(ctx context.Context, body string) (string, error) {
+func (c *anthropicClient) Describe(ctx context.Context, p PageContext) (string, error) {
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     c.model,
 		MaxTokens: 256,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(
 				anthropic.NewTextBlock(
-					fmt.Sprintf(describePrompt, truncate(body, maxBodyChars)),
+					fmt.Sprintf(describePrompt, p.URL, p.Title, truncate(p.Body, maxBodyChars)),
 				),
 			),
 		},
@@ -96,11 +106,11 @@ type openaiClient struct {
 	log    *zap.Logger
 }
 
-func (c *openaiClient) Describe(ctx context.Context, body string) (string, error) {
+func (c *openaiClient) Describe(ctx context.Context, p PageContext) (string, error) {
 	resp, err := c.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 		Model: c.model,
 		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(fmt.Sprintf(describePrompt, truncate(body, maxBodyChars))),
+			openai.UserMessage(fmt.Sprintf(describePrompt, p.URL, p.Title, truncate(p.Body, maxBodyChars))),
 		},
 	})
 	if err != nil {

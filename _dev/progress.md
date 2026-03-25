@@ -7,22 +7,32 @@
 - [x] `crawler.go` — BFS loop with depth/page limits and crawl delay
 
 ## 2. `clients/llm/` package
-- [ ] `client.go` — Unified client for Anthropic/OpenAI with prompt construction
-- [ ] `pool.go` — Semaphore-bounded goroutine pool for concurrent LLM calls
+- [x] `client.go` — Unified Anthropic/OpenAI client with prompt construction
+- [x] `pool.go` — Semaphore-bounded goroutine pool for concurrent LLM calls
 
-## 3. `server/services/generator/` package
-- [ ] `sections.go` — Infer section names from URL path segments (`/docs/*` → Docs)
-- [ ] `formatter.go` — Assemble llms.txt per spec
-- [ ] `service.go` — Wire the full crawl → describe → format pipeline
+## 3. `services/generator/` package
+- [x] `service.go` — Section inference, llms.txt formatting, crawl → describe → format pipeline
 
 ## 4. Wire it up
 - [x] Crawler integrated into `/generate` handler with live SSE progress
-- [ ] LLM client instantiated and injected into generator service
-- [ ] Mock output in `generate.go` replaced with real enhanced-mode pipeline
+- [x] LLM client instantiated and injected into generator service
+- [x] Enhanced-mode pipeline live — real LLM descriptions replace meta text
+- [x] Basic mode preserved and working; enhanced falls back gracefully if no LLM client
 
 ---
 
-## Notes
+## Remaining / Nice-to-have
 
-- Sections and formatting logic currently live directly in `server/generate.go` — should be extracted into `server/services/generator/` when the LLM client is added (step 3)
-- See `_dev/concurrent-crawling.md` and `_dev/crawl-stats-summary.md` for planned improvements to the crawler
+### Bugs
+- BUG-002: `fetchRobots` uses `client.Get` instead of `http.NewRequestWithContext` (ignores context)
+
+### Crawler improvements
+- See `_dev/concurrent-crawling.md` — parallel fetching with worker pool, shared rate limiter, and UI speed control (Standard / Fast / Turbo)
+- See `_dev/crawl-stats-summary.md` — structured stats in `done` SSE event + UI stat grid
+
+### Observability
+- See `_dev/metrics.md` — Prometheus metrics for request count, latency, LLM call rate/errors, pages crawled
+
+### Prompt / output quality
+- Seed prompt with page URL + title for richer context (fields already on `crawler.Page`)
+- See `_dev/evaluation.md` — eval framework: heuristic scoring of basic vs enhanced, LLM-as-judge comparison against ground-truth llms.txt files from real sites
