@@ -59,9 +59,10 @@ func TestGenerate_EnhancedMode(t *testing.T) {
 		Origin: "https://example.com",
 	})
 
-	// LLM should be called once per non-root page (all pages including root)
-	if mock.calls != len(testPages) {
-		t.Errorf("expected %d LLM calls, got %d", len(testPages), mock.calls)
+	// root page is skipped — LLM called for non-root pages only
+	wantCalls := len(testPages) - 1
+	if mock.calls != wantCalls {
+		t.Errorf("expected %d LLM calls, got %d", wantCalls, mock.calls)
 	}
 	if !strings.Contains(result.LLMsTxt, "LLM description.") {
 		t.Errorf("expected LLM-generated description in output, got:\n%s", result.LLMsTxt)
@@ -95,8 +96,9 @@ func TestGenerate_OnDescribeCallback(t *testing.T) {
 		},
 	})
 
-	if len(progressUpdates) != len(testPages) {
-		t.Errorf("expected %d progress updates, got %d", len(testPages), len(progressUpdates))
+	wantUpdates := len(testPages) // onDone fires for every slot including skipped root
+	if len(progressUpdates) != wantUpdates {
+		t.Errorf("expected %d progress updates, got %d", wantUpdates, len(progressUpdates))
 	}
 }
 

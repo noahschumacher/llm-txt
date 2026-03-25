@@ -40,7 +40,7 @@ type Options struct {
 // Generate runs the full pipeline for the given pages.
 func (s *Service) Generate(ctx context.Context, pages []crawler.Page, opts Options) Result {
 	if opts.Mode == "enhanced" && s.llmClient != nil {
-		pages = s.describe(ctx, pages, opts.OnDescribe)
+		pages = s.describe(ctx, pages, opts.Origin, opts.OnDescribe)
 	}
 
 	llmsTxt := formatLLMsTxt(opts.Origin, pages)
@@ -51,13 +51,17 @@ func (s *Service) Generate(ctx context.Context, pages []crawler.Page, opts Optio
 }
 
 // describe replaces each page's Description with an LLM-generated one.
-func (s *Service) describe(ctx context.Context, pages []crawler.Page, onDone func(int)) []crawler.Page {
+// The root page is skipped so its original meta description is preserved.
+func (s *Service) describe(ctx context.Context, pages []crawler.Page, origin string, onDone func(int)) []crawler.Page {
 	bodies := make([]string, len(pages))
 	for i, p := range pages {
-		bodies[i] = p.Body
+		// send empty body for root so DescribeAll skips it (empty → no LLM call needed)
+		if p.URL != origin && p.URL != origin+"/" {
+			bodies[i] = p.Body
+		}
 	}
 
-	descs := llm.DescribeAll(ctx, s.llmClient, bodies, s.concurrency, onDone)
+	descs := llm.DescribeAll(ctx, s.llmClient, bodies, s.concurrency, onDone, s.log)
 
 	// copy pages so we don't mutate the caller's slice
 	out := make([]crawler.Page, len(pages))

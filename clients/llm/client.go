@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -45,8 +44,10 @@ func New(provider, apiKey, model string, log *zap.Logger) (Describer, error) {
 }
 
 // describePrompt is sent to the LLM for every page.
-const describePrompt = `Write a one-sentence description of this web page suitable for an llms.txt index.
-Be specific and concise. Reply with only the description — no preamble, no quotes.
+const describePrompt = `Write a single short sentence (under 15 words) describing what this page covers, for an llms.txt index.
+Use a noun phrase or verb-first style (e.g. "Covers...", "Documents...", "Explains...").
+Do not start with "This page", "This web page", or "This webpage".
+Reply with only the description — no preamble, no quotes.
 
 <content>
 %s
@@ -65,9 +66,6 @@ type anthropicClient struct {
 }
 
 func (c *anthropicClient) Describe(ctx context.Context, body string) (string, error) {
-	start := time.Now()
-	c.log.Debug("llm call", zap.String("provider", anthropicProvider), zap.String("model", c.model), zap.Int("body_chars", len(body)))
-
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     c.model,
 		MaxTokens: 256,
@@ -86,7 +84,6 @@ func (c *anthropicClient) Describe(ctx context.Context, body string) (string, er
 		return "", fmt.Errorf("empty response from anthropic")
 	}
 	result := strings.TrimSpace(msg.Content[0].AsText().Text)
-	c.log.Debug("llm response", zap.String("provider", anthropicProvider), zap.Duration("duration", time.Since(start)), zap.String("result", result))
 	return result, nil
 }
 
@@ -100,9 +97,6 @@ type openaiClient struct {
 }
 
 func (c *openaiClient) Describe(ctx context.Context, body string) (string, error) {
-	start := time.Now()
-	c.log.Debug("llm call", zap.String("provider", openaiProvider), zap.String("model", c.model), zap.Int("body_chars", len(body)))
-
 	resp, err := c.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 		Model: c.model,
 		Messages: []openai.ChatCompletionMessageParamUnion{
@@ -116,7 +110,6 @@ func (c *openaiClient) Describe(ctx context.Context, body string) (string, error
 		return "", fmt.Errorf("empty response from openai")
 	}
 	result := strings.TrimSpace(resp.Choices[0].Message.Content)
-	c.log.Debug("llm response", zap.String("provider", openaiProvider), zap.Duration("duration", time.Since(start)), zap.String("result", result))
 	return result, nil
 }
 

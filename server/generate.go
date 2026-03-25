@@ -1,13 +1,17 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -90,7 +94,13 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Info("generate request", zap.String("url", req.URL), zap.String("mode", req.Mode), zap.Int("max_pages", req.MaxPages), zap.Int("max_depth", req.MaxDepth))
+	s.log.Info(
+		"generate request",
+		zap.String("url", req.URL),
+		zap.String("mode", req.Mode),
+		zap.Int("max_pages", req.MaxPages),
+		zap.Int("max_depth", req.MaxDepth),
+	)
 
 	cfg := s.cfg.CrawlConfig
 	if req.MaxPages > 0 {
@@ -140,6 +150,10 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		LLMsTxt: result.LLMsTxt,
 		Summary: result.Summary,
 	})
+
+	if s.cfg.AppEnv == "local" {
+		go s.writeDebugOutputs(req.URL, req.Mode, pages, result)
+	}
 }
 
 // parseGenerateRequest decodes and validates the request body. Mode defaults to
@@ -178,4 +192,37 @@ func normalizeURL(raw string) (string, error) {
 		return "", err
 	}
 	return u.Scheme + "://" + u.Host, nil
+}
+
+// writeDebugOutputs writes the requested mode's output alongside a basic
+// comparison to os.TempDir()/llm-txt/ for local inspection.
+func (s *Server) writeDebugOutputs(origin, mode string, pages []crawler.Page, result generator.Result) {
+	dir := filepath.Join(os.TempDir(), "llm-txt")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		s.log.Debug("debug output: could not create dir", zap.Error(err))
+		return
+	}
+
+	host := strings.NewReplacer("https://", "", "http://", "", "/", "", ".", "-").Replace(origin)
+	ts := time.Now().Format("20060102-150405")
+	prefix := filepath.Join(dir, fmt.Sprintf("%s-%s", ts, host))
+
+	write := func(path, content string) {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			s.log.Debug("debug output: write failed", zap.String("path", path), zap.Error(err))
+		}
+	}
+
+	write(prefix+"-"+mode+".txt", result.LLMsTxt)
+
+	// always write a basic version for comparison when enhanced was requested
+	if mode == "enhanced" {
+		basic := s.generator.Generate(context.Background(), pages, generator.Options{
+			Mode:   "basic",
+			Origin: origin,
+		})
+		write(prefix+"-basic.txt", basic.LLMsTxt)
+	}
+
+	s.log.Debug("debug outputs written", zap.String("dir", dir), zap.String("prefix", filepath.Base(prefix)))
 }
