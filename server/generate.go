@@ -12,11 +12,12 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/noahschumacher/llm-txt/crawler"
+	"github.com/noahschumacher/llm-txt/services/generator"
 )
 
 type generateRequest struct {
 	URL      string `json:"url"`
-	Mode     string `json:"mode"`       // "basic" | "enhanced"
+	Mode     string `json:"mode"` // "basic" | "enhanced"
 	MaxPages int    `json:"max_pages"`
 	MaxDepth int    `json:"max_depth"`
 }
@@ -120,13 +121,24 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		sse.error("crawl failed: " + err.Error())
 		return
 	}
-	sse.progress(fmt.Sprintf("Crawled %d pages. Formatting output...", len(pages)))
+	sse.progress(fmt.Sprintf("Crawled %d pages. Generating descriptions...", len(pages)))
 
-	llmsTxt := formatLLMsTxt(req.URL, pages)
+	result := s.generator.Generate(r.Context(), pages, generator.Options{
+		Mode:   req.Mode,
+		Origin: req.URL,
+		OnDescribe: func(completed int) {
+			sse.send(sseEvent{
+				Type:    "progress",
+				Message: "Generating descriptions...",
+				Crawled: completed,
+				Total:   len(pages),
+			})
+		},
+	})
 	sse.send(sseEvent{
 		Type:    "done",
-		LLMsTxt: llmsTxt,
-		Summary: fmt.Sprintf("%d pages crawled · mode: %s", len(pages), req.Mode),
+		LLMsTxt: result.LLMsTxt,
+		Summary: result.Summary,
 	})
 }
 
@@ -153,104 +165,6 @@ func parseGenerateRequest(body io.Reader) (generateRequest, error) {
 		req.Mode = "basic"
 	}
 	return req, nil
-}
-
-// formatLLMsTxt assembles a basic llms.txt from crawled pages.
-// Pages are grouped into sections by their first URL path segment
-// (e.g. /docs/* → "Docs"). Pages at the root go into a "General" section.
-func formatLLMsTxt(origin string, pages []crawler.Page) string {
-	// Find the root page description to use as the site-level blockquote
-	// and as a filter — pages that share it have no unique description.
-	var rootDesc string
-	for _, p := range pages {
-		if p.URL == origin || p.URL == origin+"/" {
-			rootDesc = p.Description
-			break
-		}
-	}
-
-	// Collect section names in insertion order, skipping pages that add no
-	// unique value (same description as root = inherited global meta tag).
-	order := make([]string, 0, len(pages))
-	sections := make(map[string][]crawler.Page, len(pages))
-
-	for _, p := range pages {
-		isRoot := p.URL == origin || p.URL == origin+"/"
-		if isRoot {
-			continue // root is already represented by the H1 + blockquote
-		}
-		if p.Description == rootDesc {
-			continue // inherited global meta, no unique content
-		}
-		sec := sectionName(p.URL, origin)
-		if _, exists := sections[sec]; !exists {
-			order = append(order, sec)
-		}
-		sections[sec] = append(sections[sec], p)
-	}
-
-	host := strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
-	var b strings.Builder
-	fmt.Fprintf(&b, "# %s\n\n", host)
-
-	if rootDesc != "" {
-		fmt.Fprintf(&b, "> %s\n\n", firstSentence(rootDesc))
-	}
-
-	for _, sec := range order {
-		fmt.Fprintf(&b, "## %s\n\n", sec)
-		for _, p := range sections[sec] {
-			title := p.Title
-			if title == "" {
-				title = p.URL
-			}
-			desc := p.Description
-			if desc == "" {
-				desc = firstSentence(p.Body)
-			}
-			if desc != "" {
-				fmt.Fprintf(&b, "- [%s](%s): %s\n", title, p.URL, desc)
-			} else {
-				fmt.Fprintf(&b, "- [%s](%s)\n", title, p.URL)
-			}
-		}
-		b.WriteString("\n")
-	}
-
-	return b.String()
-}
-
-// sectionName infers a display section from the first path segment of u.
-func sectionName(u, origin string) string {
-	path := strings.TrimPrefix(u, origin)
-	path = strings.TrimPrefix(path, "/")
-	if path == "" {
-		return "General"
-	}
-	seg := strings.SplitN(path, "/", 2)[0]
-	// Strip query strings from the segment.
-	seg = strings.SplitN(seg, "?", 2)[0]
-	if seg == "" {
-		return "General"
-	}
-	return strings.ToUpper(seg[:1]) + seg[1:]
-}
-
-// firstSentence returns the first sentence of text (up to 160 chars).
-func firstSentence(text string) string {
-	text = strings.TrimSpace(text)
-	if len(text) == 0 {
-		return ""
-	}
-	for i, ch := range text {
-		if (ch == '.' || ch == '!' || ch == '?') && i > 0 {
-			return text[:i+1]
-		}
-	}
-	if len(text) > 160 {
-		return text[:160] + "..."
-	}
-	return text
 }
 
 // normalizeURL ensures the URL has a scheme and strips path/query/fragment

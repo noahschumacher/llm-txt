@@ -12,9 +12,11 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/noahschumacher/llm-txt/clients/llm"
 	"github.com/noahschumacher/llm-txt/crawler"
 	"github.com/noahschumacher/llm-txt/pkg"
 	"github.com/noahschumacher/llm-txt/server"
+	"github.com/noahschumacher/llm-txt/services/generator"
 )
 
 //go:embed static
@@ -90,6 +92,19 @@ func main() {
 	)
 
 	// -------------------------------------------------------------------------
+	// LLM Client (optional — only required for enhanced mode)
+
+	var llmClient llm.Describer
+	if LLMProvider != "" && LLMAPIKey != "" {
+		llmClient, err = llm.New(LLMProvider, LLMAPIKey, LLMModel, logger)
+		if err != nil {
+			log.Fatalf("error creating llm client: %v", err)
+		}
+	}
+
+	gen := generator.New(logger, llmClient, LLMConcurrency)
+
+	// -------------------------------------------------------------------------
 	// Start HTTP Server
 
 	// Serve static files rooted at the static/ subdirectory so that "/" maps
@@ -107,7 +122,7 @@ func main() {
 			MaxDepth: CrawlMaxDepth,
 			DelayMS:  CrawlDelayMS,
 		},
-	}, staticFS)
+	}, staticFS, gen)
 
 	serverErrors := make(chan error, 1)
 	go func() {

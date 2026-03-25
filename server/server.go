@@ -12,6 +12,7 @@ import (
 
 	"github.com/noahschumacher/llm-txt/crawler"
 	mw "github.com/noahschumacher/llm-txt/server/middleware"
+	"github.com/noahschumacher/llm-txt/services/generator"
 )
 
 type Config struct {
@@ -21,13 +22,14 @@ type Config struct {
 }
 
 type Server struct {
-	log      *zap.Logger
-	cfg      Config
-	router   *chi.Mux
-	staticFS fs.FS
+	log       *zap.Logger
+	cfg       Config
+	router    *chi.Mux
+	staticFS  fs.FS
+	generator *generator.Service
 }
 
-func New(log *zap.Logger, cfg Config, staticFS fs.FS) *Server {
+func New(log *zap.Logger, cfg Config, staticFS fs.FS, gen *generator.Service) *Server {
 	r := chi.NewRouter()
 
 	// Global middleware — no timeout here; the SSE /generate endpoint is
@@ -38,10 +40,11 @@ func New(log *zap.Logger, cfg Config, staticFS fs.FS) *Server {
 	)
 
 	return &Server{
-		log:      log,
-		cfg:      cfg,
-		router:   r,
-		staticFS: staticFS,
+		log:       log,
+		cfg:       cfg,
+		router:    r,
+		staticFS:  staticFS,
+		generator: gen,
 	}
 }
 
