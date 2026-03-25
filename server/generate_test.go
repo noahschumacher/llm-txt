@@ -28,9 +28,9 @@ func TestParseGenerateRequest(t *testing.T) {
 			wantReq: generateRequest{URL: "https://example.com", Mode: "basic"},
 		},
 		{
-			name:    "valid enhanced with full text",
-			body:    `{"url":"https://example.com","mode":"enhanced","full_text":true}`,
-			wantReq: generateRequest{URL: "https://example.com", Mode: "enhanced", FullText: true},
+			name:    "valid enhanced with custom limits",
+			body:    `{"url":"https://example.com","mode":"enhanced","max_pages":100,"max_depth":4}`,
+			wantReq: generateRequest{URL: "https://example.com", Mode: "enhanced", MaxPages: 100, MaxDepth: 4},
 		},
 		{
 			name:    "mode defaults to basic when omitted",

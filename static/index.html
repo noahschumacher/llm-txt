@@ -149,19 +149,6 @@
                 accent-color: var(--primary);
             }
 
-            .checkbox-option {
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                font-size: 0.9rem;
-                cursor: pointer;
-                user-select: none;
-            }
-            .checkbox-option input {
-                accent-color: var(--primary);
-                width: 15px;
-                height: 15px;
-            }
             .mode-hint {
                 font-size: 0.8rem;
                 color: var(--muted);
@@ -286,10 +273,28 @@
                 grid-template-columns: 1fr;
                 gap: 1.25rem;
             }
-            @media (min-width: 600px) {
-                .results-grid.has-full {
-                    grid-template-columns: 1fr 1fr;
-                }
+            .crawl-limits {
+                display: flex;
+                gap: 1rem;
+            }
+            .crawl-limits .field {
+                flex: 1;
+                margin-bottom: 0;
+            }
+            input[type="number"].limit-input {
+                width: 100%;
+                padding: 0.55rem 0.75rem;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                font-size: 0.95rem;
+                outline: none;
+                background: #fff;
+                color: var(--text);
+                transition: border-color 0.15s;
+            }
+            input[type="number"].limit-input:focus {
+                border-color: var(--primary);
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
             }
 
             .result-block {
@@ -411,11 +416,35 @@
                         </p>
                     </div>
 
-                    <div class="field">
-                        <label class="checkbox-option">
-                            <input type="checkbox" id="full-text-checkbox" />
-                            Also generate <code>llms-full.txt</code>
-                        </label>
+                    <div class="field crawl-limits" style="margin-bottom: 1.1rem;">
+                        <div class="field">
+                            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;">
+                                <label for="max-pages-input" style="margin-bottom:0;">Max pages</label>
+                                <span class="mode-hint" style="margin-top:0;">10 – 200</span>
+                            </div>
+                            <input
+                                type="number"
+                                class="limit-input"
+                                id="max-pages-input"
+                                value="50"
+                                min="10"
+                                max="200"
+                            />
+                        </div>
+                        <div class="field">
+                            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;">
+                                <label for="max-depth-input" style="margin-bottom:0;">Max depth</label>
+                                <span class="mode-hint" style="margin-top:0;">1 – 5</span>
+                            </div>
+                            <input
+                                type="number"
+                                class="limit-input"
+                                id="max-depth-input"
+                                value="3"
+                                min="1"
+                                max="5"
+                            />
+                        </div>
                     </div>
 
                     <button
@@ -468,35 +497,6 @@
                             ></textarea>
                         </div>
 
-                        <div
-                            class="result-block"
-                            id="llms-full-txt-block"
-                            style="display: none"
-                        >
-                            <div class="result-header">
-                                <span class="result-label">llms-full.txt</span>
-                                <div class="result-actions">
-                                    <button
-                                        class="btn btn-ghost"
-                                        onclick="copyOutput('llms-full-txt-output', this)"
-                                    >
-                                        Copy
-                                    </button>
-                                    <button
-                                        class="btn btn-ghost"
-                                        onclick="downloadOutput('llms-full-txt-output', 'llms-full.txt')"
-                                    >
-                                        Download
-                                    </button>
-                                </div>
-                            </div>
-                            <textarea
-                                class="output"
-                                id="llms-full-txt-output"
-                                readonly
-                                spellcheck="false"
-                            ></textarea>
-                        </div>
                     </div>
                     <div class="summary" id="summary"></div>
                 </div>
@@ -544,8 +544,8 @@
                 const mode = document.querySelector(
                     "input[name=mode]:checked",
                 ).value;
-                const fullText =
-                    document.getElementById("full-text-checkbox").checked;
+                const maxPages = Math.min(200, Math.max(10, parseInt(document.getElementById("max-pages-input").value, 10) || 50));
+                const maxDepth = Math.min(5, Math.max(1, parseInt(document.getElementById("max-depth-input").value, 10) || 3));
 
                 // Reset UI state
                 setError(null);
@@ -561,7 +561,8 @@
                         body: JSON.stringify({
                             url,
                             mode,
-                            full_text: fullText,
+                            max_pages: maxPages,
+                            max_depth: maxDepth,
                         }),
                     });
 
@@ -705,20 +706,6 @@
             function setResults(ev) {
                 document.getElementById("llms-txt-output").value =
                     ev.llms_txt || "";
-
-                const hasFullTxt = !!ev.llms_full_txt;
-                document.getElementById("llms-full-txt-block").style.display =
-                    hasFullTxt ? "" : "none";
-                if (hasFullTxt) {
-                    document.getElementById("llms-full-txt-output").value =
-                        ev.llms_full_txt;
-                }
-
-                const grid = document.getElementById("results-grid");
-                grid.className = hasFullTxt
-                    ? "results-grid has-full"
-                    : "results-grid";
-
                 if (ev.summary) {
                     document.getElementById("summary").textContent = ev.summary;
                 }

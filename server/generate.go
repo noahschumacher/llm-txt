@@ -16,8 +16,9 @@ import (
 
 type generateRequest struct {
 	URL      string `json:"url"`
-	Mode     string `json:"mode"` // "basic" | "enhanced"
-	FullText bool   `json:"full_text"`
+	Mode     string `json:"mode"`       // "basic" | "enhanced"
+	MaxPages int    `json:"max_pages"`
+	MaxDepth int    `json:"max_depth"`
 }
 
 type sseEvent struct {
@@ -29,9 +30,8 @@ type sseEvent struct {
 	Total   int    `json:"total,omitempty"`   // max pages (upper bound)
 
 	// done
-	LLMsTxt     string `json:"llms_txt,omitempty"`
-	LLMsFullTxt string `json:"llms_full_txt,omitempty"`
-	Summary     string `json:"summary,omitempty"`
+	LLMsTxt string `json:"llms_txt,omitempty"`
+	Summary string `json:"summary,omitempty"`
 }
 
 // sseWriter sends Server-Sent Events over an open HTTP connection.
@@ -89,14 +89,21 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Info("generate request", zap.String("url", req.URL), zap.String("mode", req.Mode), zap.Bool("full_text", req.FullText))
+	s.log.Info("generate request", zap.String("url", req.URL), zap.String("mode", req.Mode), zap.Int("max_pages", req.MaxPages), zap.Int("max_depth", req.MaxDepth))
 
-	maxPages := s.cfg.CrawlConfig.MaxPages
+	cfg := s.cfg.CrawlConfig
+	if req.MaxPages > 0 {
+		cfg.MaxPages = req.MaxPages
+	}
+	if req.MaxDepth > 0 {
+		cfg.MaxDepth = req.MaxDepth
+	}
+	maxPages := cfg.MaxPages
 	if maxPages == 0 {
 		maxPages = 50
 	}
 
-	c := crawler.New(s.cfg.CrawlConfig, s.log)
+	c := crawler.New(cfg, s.log)
 	c.OnPage = func(crawled int) {
 		sse.send(sseEvent{
 			Type:    "progress",

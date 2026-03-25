@@ -12,7 +12,7 @@
 
 ## 3. `server/services/generator/` package
 - [ ] `sections.go` — Infer section names from URL path segments (`/docs/*` → Docs)
-- [ ] `formatter.go` — Assemble llms.txt (and optionally llms-full.txt) per spec
+- [ ] `formatter.go` — Assemble llms.txt per spec
 - [ ] `service.go` — Wire the full crawl → describe → format pipeline
 
 ## 4. Wire it up
