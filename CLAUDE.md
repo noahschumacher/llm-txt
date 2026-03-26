@@ -22,12 +22,12 @@ llm-txt/
 ├── server/
 │   ├── server.go                # server struct, route registration
 │   ├── generate.go              # /generate handler, SSE streaming
-│   ├── middleware/              # request-scoped middleware (log, timeout)
-│   └── services/
-│       └── generator/           # crawl → describe → format pipeline
-├── crawler/                     # BFS crawler, robots.txt, sitemap, HTML extraction
+│   └── middleware/              # request-scoped middleware (log, timeout)
+├── services/
+│   └── generator/               # crawl → describe → format pipeline
+├── crawler/                     # concurrent BFS crawler, robots.txt, sitemap, HTML extraction
 ├── clients/
-│   └── llm/                     # LLM API client and concurrent worker pool
+│   └── llm/                     # Anthropic/OpenAI client, PageContext, concurrent pool
 ├── pkg/
 │   └── env.go                   # env var loading helpers
 ├── static/
@@ -38,8 +38,8 @@ llm-txt/
 ## Architecture
 
 - Single Go binary — frontend embedded via `//go:embed static`
-- `server/` owns the HTTP layer: server struct, route registration, handlers (one file per domain), middleware, and services
-- Handlers handle HTTP concerns only (decode, validate, encode). Business logic lives in `server/services/`
+- `server/` owns the HTTP layer: route registration, handlers, middleware
+- Handlers handle HTTP concerns only (decode, validate, encode). Business logic lives in `services/`
 - External API clients live in `clients/`
 - `pkg/` is for shared utilities with no business logic
 

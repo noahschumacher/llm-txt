@@ -30,6 +30,12 @@ type Describer interface {
 	Describe(ctx context.Context, p PageContext) (string, error)
 }
 
+// Completer makes a free-form LLM call with a raw prompt string.
+// Both concrete clients implement this; the eval tool uses it for LLM-as-judge.
+type Completer interface {
+	Complete(ctx context.Context, prompt string) (string, error)
+}
+
 // New returns a Describer for the given provider ("anthropic" or "openai").
 func New(provider, apiKey, model string, log *zap.Logger) (Describer, error) {
 	switch provider {
@@ -75,6 +81,23 @@ type anthropicClient struct {
 	log    *zap.Logger
 }
 
+func (c *anthropicClient) Complete(ctx context.Context, prompt string) (string, error) {
+	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     c.model,
+		MaxTokens: 512,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(msg.Content) == 0 {
+		return "", fmt.Errorf("empty response from anthropic")
+	}
+	return strings.TrimSpace(msg.Content[0].AsText().Text), nil
+}
+
 func (c *anthropicClient) Describe(ctx context.Context, p PageContext) (string, error) {
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     c.model,
@@ -104,6 +127,22 @@ type openaiClient struct {
 	client openai.Client
 	model  string
 	log    *zap.Logger
+}
+
+func (c *openaiClient) Complete(ctx context.Context, prompt string) (string, error) {
+	resp, err := c.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Model: c.model,
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage(prompt),
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("empty response from openai")
+	}
+	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
 
 func (c *openaiClient) Describe(ctx context.Context, p PageContext) (string, error) {

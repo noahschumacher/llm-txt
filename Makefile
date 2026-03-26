@@ -18,6 +18,13 @@ build:
 test:
 	go test ./...
 
+# eval runs the evaluation CLI — pass ARGS to forward flags, e.g.:
+#   make eval ARGS="--url https://go.dev"
+#   make eval ARGS="--url https://go.dev --ground-truth https://go.dev/llms.txt"
+#   make eval ARGS="--url https://go.dev --ground-truth https://go.dev/llms.txt --llm-judge"
+eval:
+	go run ./tools/eval --env .env $(ARGS)
+
 # tidy updates go.mod and re-vendors all dependencies
 tidy:
 	go mod tidy && go mod vendor

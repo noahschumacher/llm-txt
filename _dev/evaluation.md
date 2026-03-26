@@ -1,68 +1,80 @@
 # Evaluation Framework
 
-## Summary
+## Status: Built ✓
 
-A scoring system for generated llms.txt output — comparing basic vs enhanced mode on the same crawl, and benchmarking against ground-truth llms.txt files that sites publish themselves.
+Implemented in `tools/eval/`. See `tools/eval/findings.md` for results from actual runs.
 
-## Motivation
+## Usage
 
-Right now quality is judged by eye. An eval framework would let us iterate on the prompt, section logic, and crawler with measurable signal rather than vibes.
+```bash
+# heuristics only (basic vs enhanced, no LLM key needed for basic)
+make eval ARGS="--url https://example.com"
 
-This is also directly relevant for an AI product: automated evals are how you ship prompt changes confidently.
+# + ground truth comparison
+make eval ARGS="--url https://example.com --ground-truth https://example.com/llms.txt"
+
+# + LLM-as-judge (costs money, samples up to 20 pages)
+make eval ARGS="--url https://example.com --ground-truth https://example.com/llms.txt --llm-judge"
+
+# save report to file
+make eval ARGS="--url https://example.com --out tools/eval/_reports/example.md"
+```
 
 ## Two Eval Modes
 
 ### 1. Basic vs Enhanced Comparison
 
-Already have the data from `writeDebugOutputs`. Add a scorer that runs on the pair and reports:
+Runs both modes on the same crawl and scores them side-by-side:
 
 | Dimension | Method |
 |---|---|
-| Description length | Mean word count — shorter is better up to a point |
-| "This page..." prefix rate | Regex — lower is better |
-| Blank descriptions | Count of entries with no description |
-| Section count | More sections = better content organisation |
-| Unique descriptions | % of descriptions that differ from root desc |
+| Mean description words | avg word count — shorter is better up to a point |
+| "This page..." prefix rate | regex — lower is better |
+| Blank descriptions | count — 0 is ideal |
+| Unique descriptions | % of non-blank descriptions that are distinct |
+| Section count | more sections = better content organisation |
 
-This runs entirely offline — no LLM needed, pure heuristics.
+Runs entirely offline — no LLM needed, pure string analysis.
 
 ### 2. Ground-Truth Comparison
 
-Several real sites publish their own `llms.txt`. We generate one for the same site and score ours against the real one.
-
-**Ground truth sources:**
-- `https://anthropic.com/llms.txt`
-- `https://stripe.com/llms.txt`
-- `https://docs.github.com/llms.txt`
-- `https://fly.io/llms.txt`
-
-**Scoring dimensions:**
+Fetches a site's published `llms.txt` and scores our output against it:
 
 | Dimension | Method |
 |---|---|
-| URL coverage | % of URLs in ground truth that appear in our output |
-| Section alignment | Do our section names match theirs? |
-| Description quality | LLM-as-judge: given the page body, which description is better — ours or theirs? Score 0/0.5/1 |
-| False positives | URLs we include that they don't (may indicate noise) |
+| URL coverage | % of GT URLs present in our output |
+| Section alignment | % of GT sections matched by ours |
+| False positives | URLs we include that they don't |
 
-**LLM-as-judge prompt:**
-```
-Given this page content, which description is more useful for an LLM index?
-A: {our description}
-B: {ground truth description}
-Reply with A, B, or Tie and a one-sentence reason.
-```
+Optional `--llm-judge` flag samples up to 20 overlapping pages and asks the LLM: given this page body, which description is more useful — ours or theirs?
 
-## Design
+## Known Working Ground Truth Sites
 
-**CLI tool.** `cmd/eval/main.go` — takes a URL, runs both modes, scores them, prints a report. Separate from the server, runs offline.
+| Site | GT Entries | Notes |
+|---|---|---|
+| `https://stripe.com/llms.txt` | 268 | Standard format; site crawls fine. Coverage low at 50-page cap — raise `CRAWL_MAX_PAGES` |
+| `https://hono.dev/llms.txt` | 86 | Standard format; 27 pages crawlable. Good size for 50-page runs |
 
-**Output.** Markdown report written to `_eval/` with timestamp — same pattern as debug outputs but structured for comparison.
+**Sites that don't work:**
+- `https://anthropic.com/llms.txt` — 404; site blocks crawler (0 pages crawled)
+- `https://fly.io/llms.txt` — 404
+- `https://docs.github.com/llms.txt` — returns API endpoint index, not page URLs
+- `https://elysiajs.com/llms.txt` — JS-rendered, only 1 page crawlable
 
-**Corpus.** `_eval/corpus.yaml` — list of sites with known llms.txt URLs to use as ground truth. Checked in, grows over time.
+Ground truth comparison works against any site's llms.txt regardless of format quality — imperfect format just lowers scores, which is itself a signal.
+
+## Key Learnings from Runs
+
+See `tools/eval/findings.md` for full detail. Headline findings:
+
+- **Enhanced is not optional on doc sites.** Sites without `<meta name="description">` (e.g. hono.dev) produce 0 entries in basic mode; enhanced rescues all of them.
+- **Coverage numbers are a scale story.** Low URL coverage usually means crawl cap < GT size, not quality failure.
+- **Section alignment is structurally low.** Our sections derive from URL path segments; GT sections reflect product intent. These diverge on marketing sites.
+- **JS-rendered sites are invisible.** We only follow `<a href>` in raw HTML. Sites requiring JS for navigation can't be crawled.
+- **False positives are low.** On hono.dev: 1/26 pages we found weren't in their GT. On stripe.com: 41 were marketing pages they intentionally excluded.
 
 ## Notes
 
-- LLM-as-judge calls cost money — gate behind a flag, run manually
-- Heuristic scores are free and fast — run these in CI eventually
-- Even without ground truth, the basic vs enhanced comparison on a fixed corpus gives a regression signal when prompt changes are made
+- LLM-as-judge calls cost money — gate behind `--llm-judge` flag, run manually
+- Heuristic scores are free and fast — can run in CI against a fixed set of URLs
+- Even without ground truth, basic vs enhanced comparison on a fixed corpus gives regression signal when the prompt changes
