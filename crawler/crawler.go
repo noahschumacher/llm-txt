@@ -194,7 +194,7 @@ func (c *Crawler) Crawl(ctx context.Context, origin string) ([]Page, error) {
 		}
 	}
 
-	c.log.Debug("crawl complete", zap.String("origin", origin), zap.Int("pages", len(pages)))
+	c.log.Info("crawl finished", zap.String("origin", origin), zap.Int("pages_collected", len(pages)))
 	return pages, nil
 }
 

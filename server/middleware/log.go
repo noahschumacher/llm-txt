@@ -15,7 +15,7 @@ func NewZapLoggerMiddleware(log *zap.Logger) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(ww, r)
 
-			log.Info("request",
+			log.Info("http request completed",
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 				zap.Int("status", ww.status),

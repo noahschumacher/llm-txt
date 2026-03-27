@@ -101,7 +101,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info(
-		"generate request",
+		"generation started",
 		zap.String("url", req.URL),
 		zap.String("mode", req.Mode),
 		zap.Int("max_pages", req.MaxPages),
@@ -137,10 +137,15 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	sse.progress("Fetching robots.txt and sitemap...")
 	pages, err := c.Crawl(r.Context(), req.URL)
 	if err != nil && len(pages) == 0 {
-		s.log.Error("crawl failed", zap.Error(err))
+		s.log.Error("crawl failed, no pages collected", zap.String("url", req.URL), zap.Error(err))
 		sse.error("crawl failed: " + err.Error())
 		return
 	}
+	s.log.Info("crawl complete, starting generation",
+		zap.String("url", req.URL),
+		zap.String("mode", req.Mode),
+		zap.Int("pages_crawled", len(pages)),
+	)
 	sse.progress(fmt.Sprintf("Crawled %d pages. Generating descriptions...", len(pages)))
 
 	result := s.generator.Generate(r.Context(), pages, generator.Options{
@@ -155,6 +160,11 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 			})
 		},
 	})
+	s.log.Info("generation complete",
+		zap.String("url", req.URL),
+		zap.String("mode", req.Mode),
+		zap.String("summary", result.Summary),
+	)
 	sse.send(sseEvent{
 		Type:    "done",
 		LLMsTxt: result.LLMsTxt,

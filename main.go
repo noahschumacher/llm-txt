@@ -73,7 +73,7 @@ func main() {
 	} else {
 		logConfig = zap.NewProductionConfig()
 		if AppEnv == appEnvDev {
-			logConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+			logConfig.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 		}
 	}
 
