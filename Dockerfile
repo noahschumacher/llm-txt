@@ -27,16 +27,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build -mod=vendor -o /app/bin/m
 # Step 2: Create a minimal runtime image
 FROM alpine:latest
 
-ARG DB_HOST_ARG=localhost
-
 # Set the Current Working Directory inside the container
 WORKDIR /root/
 
 # Copy the Pre-built binary file
 COPY --from=builder /app/bin/myapp .
-
-ENV LLM_TXT_ENV_FILE=.env
-ENV DB_HOST=${DB_HOST_ARG}
 
 # Command to run the executable
 CMD ["./myapp"]
