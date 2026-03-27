@@ -38,7 +38,14 @@ func DescribeAll(
 			if page.Body == "" {
 				// empty body signals skip (e.g. root page)
 			} else if desc, err := d.Describe(ctx, page); err != nil {
-				log.Warn("llm describe failed", zap.Error(err))
+				// ctx_err distinguishes a canceled context from an API-level error:
+				// nil means the error came from the provider; non-nil means our
+				// context was killed and the SDK surfaced it as the error.
+				log.Warn("llm describe failed",
+					zap.Error(err),
+					zap.String("url", page.URL),
+					zap.NamedError("ctx_err", ctx.Err()),
+				)
 			} else {
 				results[i] = desc // safe: each goroutine writes its own index
 			}

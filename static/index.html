@@ -735,7 +735,20 @@
                         input.value.slice(end);
                 });
 
+            function showPasswordScreen() {
+                sessionPassword = null;
+                document.getElementById("app").style.display = "none";
+                document.getElementById("password-screen").style.display =
+                    "flex";
+                document.getElementById("pw-input").value = "";
+                document.getElementById("pw-input").focus();
+            }
+
             async function runGenerate() {
+                if (!sessionPassword) {
+                    showPasswordScreen();
+                    return;
+                }
                 const raw = document.getElementById("url-input").value.trim();
                 const url = "https://" + raw;
                 const mode = document.querySelector(
@@ -790,6 +803,10 @@
                         }),
                     });
 
+                    if (response.status === 401) {
+                        showPasswordScreen();
+                        return;
+                    }
                     if (!response.ok) {
                         const text = await response.text();
                         throw new Error(
