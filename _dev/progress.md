@@ -32,6 +32,14 @@
 
 ---
 
+## 6. Security & deployment
+- [x] Password gate — `POST /password/check` endpoint; `X-Password` header required on `/generate`; `APP_PASSWORD` env var (default `"profound"`)
+- [x] Frontend password screen — shown on load, unlocks app on success, bounces back on 401
+- [x] Canonical origin resolution — `resolveOrigin` follows redirects at crawl start so `example.com → www.example.com` sites work correctly
+- [x] Dockerfile added for containerized deployment
+
+---
+
 ## Remaining / Nice-to-have
 
 ### Bugs

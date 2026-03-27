@@ -35,6 +35,7 @@ The binary is fully self-contained — the frontend is embedded via `//go:embed`
 |---|---|---|
 | `APP_ENV` | `local` \| `dev` \| `prod` | Yes |
 | `APP_PORT` | Port to listen on | Yes |
+| `APP_PASSWORD` | Plaintext password gate (default: `profound`) | No |
 | `LLM_PROVIDER` | `anthropic` \| `openai` | Enhanced mode only |
 | `LLM_API_KEY` | API key for the LLM provider | Enhanced mode only |
 | `LLM_MODEL` | Model to use (e.g. `claude-haiku-4-5`, `gpt-4o-mini`) | No |
@@ -137,7 +138,7 @@ sequenceDiagram
 
 ### Pipeline
 
-1. Validate and normalize the URL to its origin (scheme + host)
+1. Validate and normalize the URL to its origin (scheme + host); follow any redirect to resolve the canonical host (e.g. `example.com → www.example.com`) so sitemap seeds and host comparisons are consistent
 2. Fetch and parse `robots.txt` — build a disallow list respected throughout the crawl
 3. Fetch `sitemap.xml` (follows `sitemapindex` if present) to seed the queue; falls back to BFS from root
 4. Concurrent BFS crawl up to `CRAWL_MAX_PAGES` pages at `CRAWL_MAX_DEPTH` levels — a ticker-paced dispatcher fans work out to N workers; each worker extracts `<title>`, `<meta name="description">`, body text, and outbound links; skips `<nav>`, `<header>`, `<footer>`, `<aside>`, `<script>`, `<style>`; filters pages that redirected off-domain
@@ -157,6 +158,7 @@ llm-txt/
 ├── server/
 │   ├── server.go            # server struct, route registration
 │   ├── generate.go          # /generate handler, SSE streaming
+│   ├── password.go          # /password/check handler
 │   └── middleware/
 │       ├── log.go           # request logging
 │       └── timeout.go       # per-route timeout
