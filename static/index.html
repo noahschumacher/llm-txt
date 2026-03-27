@@ -340,6 +340,57 @@
                 border-top: 1px solid var(--border);
             }
 
+            /* ── Password screen ── */
+            #password-screen {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 60vh;
+            }
+            #password-screen .card {
+                width: 100%;
+                max-width: 400px;
+            }
+            #password-screen .card-title {
+                text-align: center;
+                margin-bottom: 1.25rem;
+            }
+            #password-screen h2 {
+                font-size: 1.1rem;
+                font-weight: 600;
+                text-align: center;
+                margin-bottom: 0.35rem;
+            }
+            #password-screen p {
+                font-size: 0.875rem;
+                color: var(--muted);
+                text-align: center;
+                margin-bottom: 1.25rem;
+            }
+            input[type="password"].pw-input {
+                width: 100%;
+                padding: 0.55rem 0.75rem;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                font-size: 0.95rem;
+                outline: none;
+                background: #fff;
+                color: var(--text);
+                margin-bottom: 0.75rem;
+                transition: border-color 0.15s;
+            }
+            input[type="password"].pw-input:focus {
+                border-color: var(--primary);
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+            }
+            #pw-error {
+                font-size: 0.8rem;
+                color: var(--error);
+                margin-bottom: 0.75rem;
+                display: none;
+            }
+
             /* ── Error banner ── */
             #error-banner {
                 display: none;
@@ -354,7 +405,36 @@
         </style>
     </head>
     <body>
-        <div class="container">
+        <!-- Password screen -->
+        <div id="password-screen">
+            <div class="card">
+                <div class="card-title">llms.txt Generator</div>
+                <h2>Enter password</h2>
+                <p>Access is restricted.</p>
+                <form id="password-form">
+                    <input
+                        type="password"
+                        class="pw-input"
+                        id="pw-input"
+                        placeholder="Password"
+                        autocomplete="current-password"
+                        autofocus
+                    />
+                    <div id="pw-error">Incorrect password.</div>
+                    <button
+                        type="submit"
+                        class="btn btn-primary"
+                        id="pw-btn"
+                        style="width: 100%"
+                    >
+                        Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main app (hidden until authenticated) -->
+        <div class="container" id="app" style="display: none">
             <header>
                 <h1>llms.txt Generator</h1>
                 <p>
@@ -416,11 +496,27 @@
                         </p>
                     </div>
 
-                    <div class="field crawl-limits" style="margin-bottom: 1.1rem;">
+                    <div
+                        class="field crawl-limits"
+                        style="margin-bottom: 1.1rem"
+                    >
                         <div class="field">
-                            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;">
-                                <label for="max-pages-input" style="margin-bottom:0;">Max pages</label>
-                                <span class="mode-hint" style="margin-top:0;">10 – 200</span>
+                            <div
+                                style="
+                                    display: flex;
+                                    justify-content: space-between;
+                                    align-items: baseline;
+                                    margin-bottom: 0.4rem;
+                                "
+                            >
+                                <label
+                                    for="max-pages-input"
+                                    style="margin-bottom: 0"
+                                    >Max pages</label
+                                >
+                                <span class="mode-hint" style="margin-top: 0"
+                                    >10 – 200</span
+                                >
                             </div>
                             <input
                                 type="number"
@@ -432,9 +528,22 @@
                             />
                         </div>
                         <div class="field">
-                            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;">
-                                <label for="max-depth-input" style="margin-bottom:0;">Max depth</label>
-                                <span class="mode-hint" style="margin-top:0;">1 – 5</span>
+                            <div
+                                style="
+                                    display: flex;
+                                    justify-content: space-between;
+                                    align-items: baseline;
+                                    margin-bottom: 0.4rem;
+                                "
+                            >
+                                <label
+                                    for="max-depth-input"
+                                    style="margin-bottom: 0"
+                                    >Max depth</label
+                                >
+                                <span class="mode-hint" style="margin-top: 0"
+                                    >1 – 5</span
+                                >
                             </div>
                             <input
                                 type="number"
@@ -447,23 +556,38 @@
                         </div>
                     </div>
 
-                    <div class="field" style="margin-bottom: 1.1rem;">
+                    <div class="field" style="margin-bottom: 1.1rem">
                         <label>Crawl speed</label>
                         <div class="radio-group">
                             <label class="radio-option">
-                                <input type="radio" name="concurrency" value="1" checked />
+                                <input
+                                    type="radio"
+                                    name="concurrency"
+                                    value="1"
+                                    checked
+                                />
                                 Standard
                             </label>
                             <label class="radio-option">
-                                <input type="radio" name="concurrency" value="3" />
+                                <input
+                                    type="radio"
+                                    name="concurrency"
+                                    value="3"
+                                />
                                 Fast
                             </label>
                             <label class="radio-option">
-                                <input type="radio" name="concurrency" value="5" />
+                                <input
+                                    type="radio"
+                                    name="concurrency"
+                                    value="5"
+                                />
                                 Turbo
                             </label>
                         </div>
-                        <p class="mode-hint">Faster speeds may miss pages on rate-limited sites.</p>
+                        <p class="mode-hint">
+                            Faster speeds may miss pages on rate-limited sites.
+                        </p>
                     </div>
 
                     <button
@@ -515,14 +639,64 @@
                                 spellcheck="false"
                             ></textarea>
                         </div>
-
                     </div>
                     <div class="summary" id="summary"></div>
                 </div>
             </div>
         </div>
+        <!-- /#app -->
 
         <script>
+            // ── Password gate ─────────────────────────────────────────────────────────
+
+            let sessionPassword = null;
+
+            document
+                .getElementById("password-form")
+                .addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    const pw = document.getElementById("pw-input").value;
+                    const btn = document.getElementById("pw-btn");
+                    btn.disabled = true;
+                    btn.textContent = "Checking…";
+
+                    try {
+                        const res = await fetch("/password/check", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ password: pw }),
+                        });
+                        if (res.ok) {
+                            sessionPassword = pw;
+                            document.getElementById(
+                                "password-screen",
+                            ).style.display = "none";
+                            document.getElementById("app").style.display =
+                                "block";
+                        } else {
+                            document.getElementById("pw-error").style.display =
+                                "block";
+                            document.getElementById("pw-input").value = "";
+                            document.getElementById("pw-input").focus();
+                        }
+                    } catch {
+                        document.getElementById("pw-error").textContent =
+                            "Network error. Try again.";
+                        document.getElementById("pw-error").style.display =
+                            "block";
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = "Continue";
+                    }
+                });
+
+            // Hide error when user starts typing again
+            document
+                .getElementById("pw-input")
+                .addEventListener("input", () => {
+                    document.getElementById("pw-error").style.display = "none";
+                });
+
             const modeHints = {
                 basic: "Uses page titles and meta descriptions — no API key required.",
                 enhanced:
@@ -544,18 +718,22 @@
                 });
 
             // Strip any scheme the user may have pasted so the prefix stays clean.
-            document.getElementById("url-input").addEventListener("paste", (e) => {
-                e.preventDefault();
-                const pasted = (e.clipboardData || window.clipboardData)
-                    .getData("text")
-                    .trim()
-                    .replace(/^https?:\/\//i, "");
-                const input = e.target;
-                const start = input.selectionStart;
-                const end = input.selectionEnd;
-                input.value =
-                    input.value.slice(0, start) + pasted + input.value.slice(end);
-            });
+            document
+                .getElementById("url-input")
+                .addEventListener("paste", (e) => {
+                    e.preventDefault();
+                    const pasted = (e.clipboardData || window.clipboardData)
+                        .getData("text")
+                        .trim()
+                        .replace(/^https?:\/\//i, "");
+                    const input = e.target;
+                    const start = input.selectionStart;
+                    const end = input.selectionEnd;
+                    input.value =
+                        input.value.slice(0, start) +
+                        pasted +
+                        input.value.slice(end);
+                });
 
             async function runGenerate() {
                 const raw = document.getElementById("url-input").value.trim();
@@ -563,9 +741,31 @@
                 const mode = document.querySelector(
                     "input[name=mode]:checked",
                 ).value;
-                const maxPages = Math.min(200, Math.max(10, parseInt(document.getElementById("max-pages-input").value, 10) || 50));
-                const maxDepth = Math.min(5, Math.max(1, parseInt(document.getElementById("max-depth-input").value, 10) || 3));
-                const concurrency = parseInt(document.querySelector("input[name=concurrency]:checked").value, 10);
+                const maxPages = Math.min(
+                    200,
+                    Math.max(
+                        10,
+                        parseInt(
+                            document.getElementById("max-pages-input").value,
+                            10,
+                        ) || 50,
+                    ),
+                );
+                const maxDepth = Math.min(
+                    5,
+                    Math.max(
+                        1,
+                        parseInt(
+                            document.getElementById("max-depth-input").value,
+                            10,
+                        ) || 3,
+                    ),
+                );
+                const concurrency = parseInt(
+                    document.querySelector("input[name=concurrency]:checked")
+                        .value,
+                    10,
+                );
 
                 // Reset UI state
                 setError(null);
@@ -577,7 +777,10 @@
                 try {
                     const response = await fetch("/generate", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Password": sessionPassword,
+                        },
                         body: JSON.stringify({
                             url,
                             mode,
@@ -638,7 +841,9 @@
                         }
                         break;
                     case "done":
-                        document.getElementById("progress-bar-fill").style.width = "100%";
+                        document.getElementById(
+                            "progress-bar-fill",
+                        ).style.width = "100%";
                         showSection("results-section", true);
                         setResults(ev);
                         appendProgress("Done.", "done");

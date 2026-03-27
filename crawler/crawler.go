@@ -86,6 +86,12 @@ func New(cfg Config, log *zap.Logger) *Crawler {
 // page limits. It respects robots.txt and uses sitemap.xml to seed the queue
 // when available.
 func (c *Crawler) Crawl(ctx context.Context, origin string) ([]Page, error) {
+	// Resolve the canonical origin by following any redirect (e.g. example.com
+	// → www.example.com). All host comparisons use this resolved value.
+	if canonical := resolveOrigin(ctx, c.client, origin); canonical != "" {
+		origin = canonical
+	}
+
 	rb := fetchRobots(ctx, c.client, origin)
 	seeds := fetchSitemapURLs(ctx, c.client, origin)
 
@@ -260,4 +266,22 @@ var skipPatterns = []string{
 	// feeds & CMS internals
 	"/feed/", "/rss", "/atom",
 	"/wp-content/", "/wp-includes/",
+}
+
+// resolveOrigin follows any redirect on the root URL and returns the scheme +
+// host of the final destination (e.g. "https://www.example.com"). Returns ""
+// on error so the caller can fall back to the original value.
+func resolveOrigin(ctx context.Context, client *http.Client, origin string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, origin, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("User-Agent", "llms-txt-generator/1.0")
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	resp.Body.Close()
+	final := resp.Request.URL
+	return final.Scheme + "://" + final.Host
 }

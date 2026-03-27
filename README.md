@@ -6,7 +6,7 @@ Enter a URL, pick a mode, and get a ready-to-publish `llms.txt` in seconds. Gene
 
 ## Setup
 
-**Prerequisites:** Go 1.22+
+**Prerequisites:** Go 1.26+
 
 ```bash
 git clone https://github.com/noahschumacher/llm-txt

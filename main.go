@@ -41,9 +41,13 @@ func main() {
 	}
 
 	var (
-		AppEnv  = pkg.LoadStringEnv("APP_ENV", true)
-		AppPort = pkg.LoadStringEnv("APP_PORT", true)
+		AppEnv      = pkg.LoadStringEnv("APP_ENV", true)
+		AppPort     = pkg.LoadStringEnv("APP_PORT", true)
+		AppPassword = pkg.LoadStringEnv("APP_PASSWORD", false)
 	)
+	if AppPassword == "" {
+		AppPassword = "profound"
+	}
 
 	var (
 		LLMProvider    = pkg.LoadStringEnv("LLM_PROVIDER", false)
@@ -117,8 +121,9 @@ func main() {
 	}
 
 	srv := server.New(logger, server.Config{
-		Port:   AppPort,
-		AppEnv: AppEnv,
+		Port:     AppPort,
+		AppEnv:   AppEnv,
+		Password: AppPassword,
 		CrawlConfig: crawler.Config{
 			MaxPages:    CrawlMaxPages,
 			MaxDepth:    CrawlMaxDepth,

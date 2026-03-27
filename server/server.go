@@ -18,6 +18,7 @@ import (
 type Config struct {
 	Port        string
 	AppEnv      string
+	Password    string
 	CrawlConfig crawler.Config
 }
 
@@ -57,6 +58,11 @@ func (s *Server) ListenAndServe() error {
 	s.router.With(mw.TimeoutMiddleware(5*time.Second)).Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+
+	// -------------------------------------------------------------------------
+	// Password
+
+	s.router.With(mw.TimeoutMiddleware(5*time.Second)).Post("/password/check", s.handlePasswordCheck)
 
 	// -------------------------------------------------------------------------
 	// Generation (SSE — no timeout middleware)

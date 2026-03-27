@@ -83,6 +83,11 @@ func (s *sseWriter) error(msg string) {
 }
 
 func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-Password") != s.cfg.Password {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	req, err := parseGenerateRequest(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
