@@ -192,7 +192,7 @@ func TestCrawl_BasicBFS(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := Config{MaxPages: 10, MaxDepth: 2, DelayMS: 0}
+	cfg := NewConfig(10, 2, 0, 0)
 	pages, err := New(cfg, nil).Crawl(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -231,7 +231,7 @@ func TestCrawl_RespectsRobots(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := Config{MaxPages: 10, MaxDepth: 2, DelayMS: 0}
+	cfg := NewConfig(10, 2, 0, 0)
 	pages, err := New(cfg, nil).Crawl(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -268,12 +268,12 @@ func TestCrawl_MaxPages(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := Config{MaxPages: 3, MaxDepth: 3, DelayMS: 0}
+	cfg := NewConfig(3, 3, 0, 0)
 	pages, err := New(cfg, nil).Crawl(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(pages) > cfg.MaxPages {
-		t.Errorf("got %d pages, want <= %d", len(pages), cfg.MaxPages)
+	if len(pages) > cfg.MaxPages() {
+		t.Errorf("got %d pages, want <= %d", len(pages), cfg.MaxPages())
 	}
 }

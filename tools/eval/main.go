@@ -48,12 +48,12 @@ func main() {
 	llmModel := os.Getenv("LLM_MODEL")
 	llmConcurrency := intEnv("LLM_CONCURRENCY", 5)
 
-	crawlCfg := crawler.Config{
-		MaxPages:    intEnv("CRAWL_MAX_PAGES", 50),
-		MaxDepth:    intEnv("CRAWL_MAX_DEPTH", 3),
-		DelayMS:     intEnv("CRAWL_DELAY_MS", 200),
-		Concurrency: intEnv("CRAWL_CONCURRENCY", 3),
-	}
+	crawlCfg := crawler.NewConfig(
+		intEnv("CRAWL_MAX_PAGES", 50),
+		intEnv("CRAWL_MAX_DEPTH", 3),
+		intEnv("CRAWL_DELAY_MS", 200),
+		intEnv("CRAWL_CONCURRENCY", 3),
+	)
 
 	nop := zap.NewNop()
 

@@ -124,12 +124,7 @@ func main() {
 		Port:     AppPort,
 		AppEnv:   AppEnv,
 		Password: AppPassword,
-		CrawlConfig: crawler.Config{
-			MaxPages:    CrawlMaxPages,
-			MaxDepth:    CrawlMaxDepth,
-			DelayMS:     CrawlDelayMS,
-			Concurrency: CrawlConcurrency,
-		},
+		CrawlConfig: crawler.NewConfig(CrawlMaxPages, CrawlMaxDepth, CrawlDelayMS, CrawlConcurrency),
 	}, staticFS, gen)
 
 	serverErrors := make(chan error, 1)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -19,40 +20,53 @@ type Page struct {
 	Depth       int
 }
 
-// Config controls crawl behavior. Zero values apply the defaults shown below.
+// Config controls crawl behavior. Use NewConfig to construct with defaults applied.
 type Config struct {
-	MaxPages    int // default 50
-	MaxDepth    int // default 3
-	DelayMS     int // default 500
-	Concurrency int // default 1 (sequential)
+	maxPages    int
+	maxDepth    int
+	delay       time.Duration
+	concurrency int
 }
 
-func (c Config) maxPages() int {
-	if c.MaxPages > 0 {
-		return c.MaxPages
+// NewConfig returns a Config with defaults applied for any zero values:
+// maxPages=50, maxDepth=3, delayMS=500, concurrency=1.
+func NewConfig(maxPages, maxDepth, delayMS, concurrency int) Config {
+	if maxPages == 0 {
+		maxPages = 50
 	}
-	return 50
+	if maxDepth == 0 {
+		maxDepth = 3
+	}
+	if delayMS == 0 {
+		delayMS = 500
+	}
+	if concurrency == 0 {
+		concurrency = 1
+	}
+	return Config{
+		maxPages:    maxPages,
+		maxDepth:    maxDepth,
+		delay:       time.Duration(delayMS) * time.Millisecond,
+		concurrency: concurrency,
+	}
 }
 
-func (c Config) maxDepth() int {
-	if c.MaxDepth > 0 {
-		return c.MaxDepth
-	}
-	return 3
-}
+// MaxPages returns the configured page cap.
+func (c Config) MaxPages() int { return c.maxPages }
 
-func (c Config) delay() time.Duration {
-	if c.DelayMS > 0 {
-		return time.Duration(c.DelayMS) * time.Millisecond
+// WithOverrides returns a copy of c with any non-zero values applied.
+// Used by the HTTP handler to apply per-request UI overrides.
+func (c Config) WithOverrides(maxPages, maxDepth, concurrency int) Config {
+	if maxPages > 0 {
+		c.maxPages = maxPages
 	}
-	return 500 * time.Millisecond
-}
-
-func (c Config) concurrency() int {
-	if c.Concurrency > 1 {
-		return c.Concurrency
+	if maxDepth > 0 {
+		c.maxDepth = maxDepth
 	}
-	return 1
+	if concurrency > 0 {
+		c.concurrency = concurrency
+	}
+	return c
 }
 
 type queueItem struct {
@@ -96,9 +110,9 @@ func (c *Crawler) Crawl(ctx context.Context, origin string) ([]Page, error) {
 	seeds := fetchSitemapURLs(ctx, c.client, origin)
 
 	visited := mapset.NewSet[string]()
-	pages := make([]Page, 0, c.cfg.maxPages())
+	pages := make([]Page, 0, c.cfg.maxPages)
 
-	queue := make([]queueItem, 0, c.cfg.maxPages())
+	queue := make([]queueItem, 0, c.cfg.maxPages)
 	queue = append(queue, queueItem{url: origin, depth: 0})
 	visited.Add(normalizeURL(origin))
 
@@ -120,48 +134,61 @@ func (c *Crawler) Crawl(ctx context.Context, origin string) ([]Page, error) {
 		ok    bool
 	}
 
-	concurrency := c.cfg.concurrency()
+	concurrency := c.cfg.concurrency
+	maxP := c.cfg.maxPages
+
+	// work is buffered to concurrency — its capacity is the slot gate.
+	work := make(chan queueItem, concurrency)
 	results := make(chan fetchResult, concurrency)
+
+	// N fixed workers: fetch only, no knowledge of queue or state.
+	var wg sync.WaitGroup
+	for range concurrency {
+		wg.Go(func() {
+			for it := range work {
+				page, links, ok := fetchPage(ctx, c.client, it.url, it.depth)
+				results <- fetchResult{page, links, it, ok}
+			}
+		})
+	}
+
 	// Ticker paces dispatches: delay/concurrency keeps total rate = 1/delay per worker.
-	tickInterval := c.cfg.delay()
+	tickInterval := c.cfg.delay
 	if concurrency > 1 {
-		tickInterval = c.cfg.delay() / time.Duration(concurrency)
+		tickInterval = c.cfg.delay / time.Duration(concurrency)
 	}
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
-	inFlight := 0
-	maxP := c.cfg.maxPages()
-
-	dispatch := func() {
-		for len(queue) > 0 && inFlight < concurrency && len(pages)+inFlight < maxP {
-			item := queue[0]
-			queue = queue[1:]
-			if !rb.allowed(item.url) {
-				c.log.Debug("skipped (robots)", zap.String("url", item.url))
-				continue
-			}
-			c.log.Debug("fetching", zap.String("url", item.url), zap.Int("depth", item.depth))
-			inFlight++
-			go func(it queueItem) {
-				page, links, ok := fetchPage(ctx, c.client, it.url, it.depth)
-				results <- fetchResult{page, links, it, ok}
-			}(item)
-		}
-	}
+	inFlight := 0 // termination counter only; slot gating is via work channel capacity
 
 	for (len(queue) > 0 || inFlight > 0) && len(pages) < maxP {
 		if ctx.Err() != nil {
-			return pages, ctx.Err()
+			break
 		}
 
 		select {
 		case <-ticker.C:
-			dispatch()
+		dispatch:
+			for len(queue) > 0 && len(pages)+inFlight < maxP {
+				item := queue[0]
+				queue = queue[1:]
+				if !rb.allowed(item.url) {
+					continue
+				}
+				select {
+				case work <- item:
+					inFlight++
+				default:
+					// All worker slots full; put item back for next tick.
+					queue = append([]queueItem{item}, queue...)
+					break dispatch
+				}
+			}
+
 		case r := <-results:
 			inFlight--
 			if !r.ok {
-				c.log.Debug("skipped (non-html or error)", zap.String("url", r.item.url))
 				continue
 			}
 			pages = append(pages, r.page)
@@ -169,7 +196,7 @@ func (c *Crawler) Crawl(ctx context.Context, origin string) ([]Page, error) {
 				c.OnPage(len(pages))
 			}
 			enqueued := 0
-			if r.item.depth < c.cfg.maxDepth() {
+			if r.item.depth < c.cfg.maxDepth {
 				for _, link := range r.links {
 					if !sameHost(link, origin) || shouldSkip(link) {
 						continue
@@ -189,13 +216,19 @@ func (c *Crawler) Crawl(ctx context.Context, origin string) ([]Page, error) {
 				zap.Int("queue_len", len(queue)),
 				zap.Int("pages_collected", len(pages)),
 			)
+
 		case <-ctx.Done():
+			close(work)
+			wg.Wait()
 			return pages, ctx.Err()
 		}
 	}
 
+	close(work)
+	wg.Wait()
+
 	c.log.Info("crawl finished", zap.String("origin", origin), zap.Int("pages_collected", len(pages)))
-	return pages, nil
+	return pages, ctx.Err()
 }
 
 // fetchPage GETs a URL and extracts its content. Returns false if the page

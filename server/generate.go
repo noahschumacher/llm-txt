@@ -109,20 +109,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		zap.Int("concurrency", req.Concurrency),
 	)
 
-	cfg := s.cfg.CrawlConfig
-	if req.MaxPages > 0 {
-		cfg.MaxPages = req.MaxPages
-	}
-	if req.MaxDepth > 0 {
-		cfg.MaxDepth = req.MaxDepth
-	}
-	if req.Concurrency > 0 {
-		cfg.Concurrency = req.Concurrency
-	}
-	maxPages := cfg.MaxPages
-	if maxPages == 0 {
-		maxPages = 50
-	}
+	cfg := s.cfg.CrawlConfig.WithOverrides(req.MaxPages, req.MaxDepth, req.Concurrency)
 
 	c := crawler.New(cfg, s.log)
 	c.OnPage = func(crawled int) {
@@ -130,7 +117,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 			Type:    "progress",
 			Message: "Crawling...",
 			Crawled: crawled,
-			Total:   maxPages,
+			Total:   cfg.MaxPages(),
 		})
 	}
 
