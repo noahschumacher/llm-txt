@@ -1,17 +1,14 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
-	"time"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -46,6 +43,7 @@ type sseEvent struct {
 type sseWriter struct {
 	w       http.ResponseWriter
 	flusher http.Flusher
+	mu      sync.Mutex // guards concurrent writes during LLM generation
 }
 
 func newSSEWriter(w http.ResponseWriter) (*sseWriter, bool) {
@@ -67,6 +65,8 @@ func (s *sseWriter) send(ev sseEvent) error {
 	if err != nil {
 		return err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if _, err := fmt.Fprintf(s.w, "data: %s\n\n", b); err != nil {
 		return err
 	}
@@ -152,14 +152,10 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		zap.String("mode", req.Mode),
 		zap.String("summary", result.Summary),
 	)
-	sse.send(sseEvent{
-		Type:    "done",
-		LLMsTxt: result.LLMsTxt,
-		Summary: result.Summary,
-	})
-
-	if s.cfg.AppEnv == "local" {
-		go s.writeDebugOutputs(req.URL, req.Mode, pages, result)
+	if err := sse.send(sseEvent{Type: "done", LLMsTxt: result.LLMsTxt, Summary: result.Summary}); err != nil {
+		s.log.Warn("failed to send done event — client disconnected before generation finished",
+			zap.String("url", req.URL), zap.Error(err),
+		)
 	}
 }
 
@@ -199,37 +195,4 @@ func normalizeURL(raw string) (string, error) {
 		return "", err
 	}
 	return u.Scheme + "://" + u.Host, nil
-}
-
-// writeDebugOutputs writes the requested mode's output alongside a basic
-// comparison to os.TempDir()/llm-txt/ for local inspection.
-func (s *Server) writeDebugOutputs(origin, mode string, pages []crawler.Page, result generator.Result) {
-	dir := filepath.Join(os.TempDir(), "llm-txt")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		s.log.Debug("debug output: could not create dir", zap.Error(err))
-		return
-	}
-
-	host := strings.NewReplacer("https://", "", "http://", "", "/", "", ".", "-").Replace(origin)
-	ts := time.Now().Format("20060102-150405")
-	prefix := filepath.Join(dir, fmt.Sprintf("%s-%s", ts, host))
-
-	write := func(path, content string) {
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			s.log.Debug("debug output: write failed", zap.String("path", path), zap.Error(err))
-		}
-	}
-
-	write(prefix+"-"+mode+".txt", result.LLMsTxt)
-
-	// always write a basic version for comparison when enhanced was requested
-	if mode == "enhanced" {
-		basic := s.generator.Generate(context.Background(), pages, generator.Options{
-			Mode:   "basic",
-			Origin: origin,
-		})
-		write(prefix+"-basic.txt", basic.LLMsTxt)
-	}
-
-	s.log.Debug("debug outputs written", zap.String("dir", dir), zap.String("prefix", filepath.Base(prefix)))
 }
