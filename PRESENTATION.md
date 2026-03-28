@@ -44,8 +44,13 @@ sequenceDiagram
     B->>H: POST /generate {url, mode, max_pages, max_depth, concurrency}
     H-->>B: 200 text/event-stream (SSE opened)
 
-    H->>T: GET /robots.txt + /sitemap.xml
     H->>C: Crawl(ctx, origin)
+    C->>T: GET origin (resolve canonical redirect)
+    T-->>C: final URL
+    C->>T: GET /robots.txt
+    T-->>C: disallowed paths
+    C->>T: GET /sitemap.xml
+    T-->>C: seed URLs
 
     loop BFS — ticker-paced, N workers
         C->>T: GET page (concurrent)
@@ -53,17 +58,47 @@ sequenceDiagram
         C-->>B: SSE progress {crawled, total}
     end
 
-    H->>G: Generate(pages, mode)
+    H->>G: Generate(pages, opts)
 
     alt enhanced mode
-        loop per page (semaphore-bounded)
-            G->>L: PageContext{URL, Title, Body}
-            L-->>G: description
+        loop per page (semaphore-bounded, root skipped)
+            G->>L: PageContext{URL, Title, Body ≤3000 chars}
+            L-->>G: description (≤15 words)
             G-->>B: SSE progress {completed, total}
         end
+    else basic mode
+        note over G: use Page.Description already<br/>extracted from meta tag during crawl
     end
 
     H-->>B: SSE done {llms_txt, summary}
+```
+
+### Crawler Internals
+
+```mermaid
+flowchart TD
+    A([Crawl called]) --> B[resolveOrigin\nfollow redirect on bare domain]
+    B --> C[fetchRobots\nparse /robots.txt]
+    C --> D[fetchSitemapURLs\nparse /sitemap.xml]
+    D --> E[seed queue:\norigin + sitemap URLs]
+
+    E --> F{queue empty\nor pages ≥ max?}
+    F -->|done| Z([return pages])
+
+    F -->|no| G[ticker fires\nN slots available]
+    G --> H[pop item from queue]
+    H --> I{robots.txt\nallows URL?}
+    I -->|no| F
+    I -->|yes| J[go fetchPage\nconcurrent GET]
+    J --> K{200 OK +\ntext/html +\nsame host?}
+    K -->|no| F
+    K -->|yes| L[extract title\nmeta description\nbody text\nlinks]
+    L --> M[normalize + filter links\nshould skip? same host?]
+    M --> N{depth\n< maxDepth?}
+    N -->|yes| O[enqueue new links\nat depth+1]
+    N -->|no| P[OnPage callback → SSE]
+    O --> P
+    P --> F
 ```
 
 ---
@@ -89,6 +124,29 @@ sequenceDiagram
 ---
 
 ## 4. Basic vs Enhanced
+
+```mermaid
+flowchart LR
+    A([crawled Page\nURL · Title · MetaDesc · Body])
+
+    A --> B{mode?}
+
+    subgraph basic [Basic — free, instant]
+        C[Page.Description\nalready set from\nmeta tag during crawl]
+    end
+
+    subgraph enhanced [Enhanced — LLM]
+        D["send URL + Title + Body\n(capped at 3000 chars)\nto LLM API"]
+        D --> E["LLM returns\n≤15-word description"]
+        E --> F[replace Page.Description\nroot page kept as-is]
+    end
+
+    B -->|basic| C
+    B -->|enhanced| D
+
+    C --> G([formatLLMsTxt\ngroup by URL path segment\nassemble sections])
+    F --> G
+```
 
 Basic reads `<meta name="description">` directly — zero cost, zero latency. Enhanced sends each page's URL, title, and body (capped at 3000 chars) to the LLM:
 
