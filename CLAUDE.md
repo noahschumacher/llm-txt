@@ -22,6 +22,7 @@ llm-txt/
 ├── server/
 │   ├── server.go                # server struct, route registration
 │   ├── generate.go              # /generate handler, SSE streaming
+│   ├── password.go              # /password/check handler
 │   └── middleware/              # request-scoped middleware (log, timeout)
 ├── services/
 │   └── generator/               # crawl → describe → format pipeline

@@ -40,17 +40,21 @@
 
 ---
 
-## Remaining / Nice-to-have
+## Out of Scope (documented, not built)
 
-### Bugs
-- BUG-002: `fetchRobots` uses `client.Get` instead of `http.NewRequestWithContext` (ignores context)
+These were designed and scoped but intentionally cut to keep the submission focused. Design docs are in `_dev/`.
 
-### Observability
-- See `_dev/metrics.md` — Prometheus metrics for request count, latency, LLM call rate/errors, pages crawled
-- See `_dev/crawl-stats-summary.md` — structured stats in `done` SSE event + UI stat grid
+### Known bug
+- **BUG-002:** `fetchRobots` uses `client.Get` instead of `http.NewRequestWithContext` — robots.txt fetch ignores context cancellation. Low risk in practice (fast request, no long-running consequence).
+
+### Observability — `_dev/metrics.md`
+Prometheus `/metrics` endpoint: request count, latency histograms, LLM call rate/errors, pages crawled per request. Design is complete; skipped in favor of shipping core features.
+
+### Crawl stats summary — `_dev/crawl-stats-summary.md`
+Structured `stats` field in the `done` SSE event (pages fetched, pages skipped, duration, sitemap-seeded flag) and a small stat grid in the UI. Straightforward to add.
 
 ### Eval improvements (from findings)
 - Warn in report when basic mode produces 0 entries (site has no meta descriptions)
 - Add scale-gap caveat to URL coverage when crawled pages < GT entry count
-- Consider "any section overlap" metric alongside strict alignment fraction
-- JS-rendered sites are invisible — worth noting in UI or report
+- "Any section overlap" metric alongside strict alignment fraction
+- Surface JS-rendering limitation in the UI
